@@ -24,6 +24,10 @@ for i in range(len(string)):
 bytearr[0] &= 0xFF
 print(bytearr)
 
-int toets = 0
+toets = 0
 
-toets +=
+stringEncoded = string.encode(encoding="ascii",errors="ignore")
+print(stringEncoded)
+stringEncoded = bytearray(stringEncoded)
+stringEncoded[0] = stringEncoded[0]^255
+print(stringEncoded)
