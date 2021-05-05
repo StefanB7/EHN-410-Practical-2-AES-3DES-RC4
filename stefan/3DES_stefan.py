@@ -55,8 +55,36 @@ def DES_Encryption(plaintext, inspect_mode = 0, key = 0, ip = 0):
 #This helper function performs permutation on the bitarray according to the positions specified by
 #an permutation array, that contains the locatons where bits should be allocated in the permuted array
 def permutation(bytearr, permutationArray):
-    outputByteArray = bytearray()
-    
+    outputByteArray = bytearray(len(bytearr))
+    permutationDec = np.arange(len(permutationArray))
+
+    #Decrement each permutation values such that the values are indexes:
+    for i in range(len(permutationArray)):
+        permutationDec[i] = permutationArray[i] - 1
+
+    #Iterate over every bit
+    for i in range(len(bytearr)*8):
+        #Permutation value:
+        permuteValue = permutationDec[i]
+        byteIndex = permuteValue // 8
+        bitIndex = permuteValue % 8
+
+        #If the bit at the permutation index is set, set the permuted bit in the output
+        bSet = bytearr[byteIndex]
+        value = 0x01 << (7-bitIndex)
+        bSet = bytearr[byteIndex] & (0x01 << (7-bitIndex))
+
+        #Since the output byte array is already all zeros, only set bit if need be
+        if (bSet):
+            outputByteArray[i//8] = outputByteArray[i//8] | (0x01 << (7-(i%8)))
+
+    return outputByteArray
+
+
+
+
+
+
 
 
 
@@ -84,3 +112,12 @@ stringEncoded[0] = stringEncoded[0]^255
 #print(stringEncoded)
 
 TDEA_Encrypt("Cat")
+
+permutationL = np.load("Practical 2 File Package/DES_Initial_Permutation.npy")
+permutationL = np.array(permutationL, dtype=int)
+print(permutationL)
+
+bytearr = bytearray("d",encoding="ascii")
+print(bytearr)
+
+print(permutation(bytearr, [3,4,7,6,5,2,8,1]))
