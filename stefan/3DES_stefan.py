@@ -18,6 +18,7 @@ def TDEA_Encrypt(plaintext, inspect_mode = 0, key1 = 0, key2 = 0, key3 = 0, ip =
         # Convert the plaintext string to its bit representation
         plaintextEncoded = plaintext.encode(encoding="ascii",errors="ignore")
         plaintextEncoded = bytearray(plaintextEncoded)
+
         #Pad the plaintext such that the total number of bytes is an integral multiple of 64 (for DES)
         plaintextEncoded = pad(plaintextEncoded, 64)
 
@@ -30,8 +31,6 @@ def TDEA_Encrypt(plaintext, inspect_mode = 0, key1 = 0, key2 = 0, key3 = 0, ip =
 
 def TDEA_Decrypt(inspect_mode, ciphertext, key1, key2, key3, inv_ip):
     print("3DES Decryption")
-
-permutation = np.load("Practical 2 File package/DES_Initial_Permutation.npy")
 
 
 ###### HELPER FUNCTIONS #####
@@ -46,10 +45,15 @@ def pad(bytearr, integral_number = 64, padding = 0x00):
         bytearrayOutput.append(padding)
     return bytearrayOutput
 
-
 #This functions performs normal DES encryption:
 def DES_Encryption(plaintext, inspect_mode = 0, key = 0, ip = 0):
-    print("Hello")
+    status = copy.deepcopy(plaintext)
+
+    #Create the keys:
+
+    #Do the initial permutation
+    status = permutation(status, ip)
+
 
 
 #This helper function performs permutation on the bitarray according to the positions specified by
@@ -61,6 +65,10 @@ def permutation(bytearr, permutationArray):
     #Decrement each permutation values such that the values are indexes:
     for i in range(len(permutationArray)):
         permutationDec[i] = permutationArray[i] - 1
+
+    #Check if there are enough values:
+    if (max(permutationDec) >= (len(bytearr)*8)):
+        raise Exception("DES Permutation, but too few indexes in binary array.")
 
     #Iterate over every bit
     for i in range(len(bytearr)*8):
@@ -80,11 +88,41 @@ def permutation(bytearr, permutationArray):
 
     return outputByteArray
 
+def keyGeneration(originalKey, permutationInitial, permutationRound):
+    #Do the inital permutation on the original key:
+    permutedKey = permutation(originalKey, permutationInitial)
+
+    #Calculate the subkeys:
+    oneBitShifts = [1, 2, 9, 16]
+
+    for keyNum in range(16):
+        if (i+1) in oneBitShifts:
+            numshifts = 1
+        else:
+            numshifts = 2
 
 
 
 
 
+
+def shiftLeft(bytearr, numshifts):
+    output = bytearray(len(bytearr))
+
+    for i in range(len(bytearr)-1,-1,-1):
+        output[i] = bytearr[i] << 1
+
+        if i == len(bytearr) - 1:
+            insertbit = bytearr[0] & (0x01 << 7)
+        else:
+            insertbit = bytearr[i+1] & (0x01 << 7)
+
+        if insertbit > 0:           #0000 0001
+            output[i] = output[i] | (0x01)
+        else:                       #1111 1110
+            output[i] = output[i] & (0xFE)
+
+    return output
 
 
 
@@ -121,3 +159,15 @@ bytearr = bytearray("d",encoding="ascii")
 print(bytearr)
 
 print(permutation(bytearr, [3,4,7,6,5,2,8,1]))
+
+permutationChoice1 = np.load("Practical 2 File Package/DES_Permutation_Choice1.npy")
+print(permutationChoice1)
+print(len(permutationChoice1))
+
+bytearr = bytearray("de", encoding="ascii")
+print(shiftLeft(bytearray("hi", encoding="ascii"), 1))
+print("Hi")
+
+toets = bytearray(5)
+toets[1] = 5
+print(toets)
