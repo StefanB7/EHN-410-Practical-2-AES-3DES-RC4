@@ -143,7 +143,7 @@ def F(RHS, subkey):
 
 
 #This helper function performs permutation on the bitarray according to the positions specified by
-#an permutation array, that contains the locatons where bits should be allocated in the permuted array
+#an permutation array, that contains the locations where bits should be allocated in the permutated array
 def permutation(bytearr, permutationArray):
     #The output array should just be the size of the permutationArray divided by 8 (its bytes)
     outputByteArray = bytearray(len(permutationArray)//8)
