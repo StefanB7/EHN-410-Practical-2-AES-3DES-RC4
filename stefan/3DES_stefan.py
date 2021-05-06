@@ -59,7 +59,8 @@ def DES_Encryption(plaintext, inspect_mode = 0, key = 0, ip = 0):
 #This helper function performs permutation on the bitarray according to the positions specified by
 #an permutation array, that contains the locatons where bits should be allocated in the permuted array
 def permutation(bytearr, permutationArray):
-    outputByteArray = bytearray(len(bytearr))
+    #The output array should just be the size of the permutationArray divided by 8 (its bytes)
+    outputByteArray = bytearray(len(permutationArray)//8)
     permutationDec = np.arange(len(permutationArray))
 
     #Decrement each permutation values such that the values are indexes:
@@ -71,15 +72,14 @@ def permutation(bytearr, permutationArray):
         raise Exception("DES Permutation, but too few indexes in binary array.")
 
     #Iterate over every bit
-    for i in range(len(bytearr)*8):
+    for i in range(len(outputByteArray)*8):
         #Permutation value:
         permuteValue = permutationDec[i]
         byteIndex = permuteValue // 8
         bitIndex = permuteValue % 8
 
         #If the bit at the permutation index is set, set the permuted bit in the output
-        bSet = bytearr[byteIndex]
-        value = 0x01 << (7-bitIndex)
+        #Check bit value at the permutation position
         bSet = bytearr[byteIndex] & (0x01 << (7-bitIndex))
 
         #Since the output byte array is already all zeros, only set bit if need be
@@ -93,6 +93,7 @@ def keyGeneration(originalKey, permutationInitial, permutationRound):
     permutedKey = permutation(originalKey, permutationInitial)
 
     #Calculate the subkeys:
+
     oneBitShifts = [1, 2, 9, 16]
 
     for keyNum in range(16):
@@ -101,73 +102,137 @@ def keyGeneration(originalKey, permutationInitial, permutationRound):
         else:
             numshifts = 2
 
+        #The key left shift function works by performing a circular left shift on each half of the key seperately:
 
 
 
 
 
+#This function performs a circular left shift on the input bytearray
 def shiftLeft(bytearr, numshifts):
     output = bytearray(len(bytearr))
 
-    for i in range(len(bytearr)-1,-1,-1):
-        output[i] = bytearr[i] << 1
+    #Do one shifts for the number of shifts:
+    for shiftnum in range(numshifts):
+        for i in range(len(bytearr)-1,-1,-1):
+            #Shift each byte in bytearray one position left
+                                    # 0111 111 -> to ensure there is no bit higher than MSB
+            output[i] = (bytearr[i] & 0x7F) << 1
 
-        if i == len(bytearr) - 1:
-            insertbit = bytearr[0] & (0x01 << 7)
-        else:
-            insertbit = bytearr[i+1] & (0x01 << 7)
+            #Fetch the bit that should be shifted in to the LSB position (circular)
+            if i == len(bytearr) - 1:
+                insertbit = bytearr[0] & (0x01 << 7)
+            else:
+                insertbit = bytearr[i+1] & (0x01 << 7)
 
-        if insertbit > 0:           #0000 0001
-            output[i] = output[i] | (0x01)
-        else:                       #1111 1110
-            output[i] = output[i] & (0xFE)
+            #Insert the bit into the LSB position
+            if insertbit > 0:           #0000 0001
+                output[i] = output[i] | (0x01)
+            else:                       #1111 1110
+                output[i] = output[i] & (0xFE)
 
     return output
 
+#This function performs a circular left shift on each half of the key
+#The function requires a 56 bit (7 byte) input bytearray
+def shiftKeyHalvesLeft(keyInput, numshifts):
+    key = copy.deepcopy(keyInput)
 
+    for numberofshifts in range(numshifts):
 
+        output = bytearray(7)
 
+        #Perform the circular left shift on the left half of the key:
+        leftMSB = key[0] & (0x01 << 7)
+        rightMSB = key[3] & (0x01 << 3)
+
+        #Shift all bytes one bit position left, the most significant bits in each half will be corrected later
+        for i in range(7):
+            #Shift each byte in bytearray one position left
+                                #0111 111 -> to ensure there is no bit higher than MSB
+            output[i] = (key[i] & 0x7F) << 1
+
+            #Fetch the bit that should be shifted in to the LSB position (circular)
+            insertbit = 0x00
+            if i < 6:       #The last byte is left as is
+                insertbit = key[i+1] & (0x01 << 7)
+
+            #Insert the bit into the LSB position
+            if insertbit > 0:           #0000 0001
+                output[i] = output[i] | (0x01)
+            else:                       #1111 1110
+                output[i] = output[i] & (0xFE)
+
+        #Correct the MSB in each half:
+        #The left MSB should be in position 4 in the middle byte (after a left shift)
+        if (leftMSB):
+            output[3] = output[3] | (0x01 << 4)
+        else:                       #1110 1111
+            output[3] = output[3] & (0xEF)
+
+        if (rightMSB):              #0000 00001
+            output[6] = output[6] | (0x01)
+        else:                       #1111 1110
+            output[6] = output[6] & (0xFE)
+
+        key = copy.deepcopy(output)
+
+    return key
 
 
 
 ##### TESTING CODE ######
 
-string = "Hello, hoe gaan dit vandag?"
+# string = "Hello, hoe gaan dit vandag?"
+#
+# bytearr = np.empty(len(string),dtype=np.byte)
+# for i in range(len(string)):
+#     bytearr[i] = ord(string[i])
+#
+# bytearr[0] &= 0xFF
+# print(bytearr)
+#
+# toets = 0
+#
+# stringEncoded = string.encode(encoding="ascii",errors="ignore")
+# #print(stringEncoded)
+# stringEncoded = bytearray(stringEncoded)
+# stringEncoded[0] = stringEncoded[0]^255
+# #print(stringEncoded)
+#
+# TDEA_Encrypt("Cat")
+#
+# permutationL = np.load("Practical 2 File Package/DES_Initial_Permutation.npy")
+# permutationL = np.array(permutationL, dtype=int)
+# print(permutationL)
+#
+# bytearr = bytearray("d",encoding="ascii")
+# print(bytearr)
+#
+# print(permutation(bytearr, [3,4,7,6,5,2,8,1]))
+#
+# permutationChoice1 = np.load("Practical 2 File Package/DES_Permutation_Choice1.npy")
+# print(permutationChoice1)
+# print(len(permutationChoice1))
+#
+# bytearr = bytearray("de", encoding="ascii")
+# print(shiftLeft(bytearray("hi", encoding="ascii"), 1))
+# print("Hi")
+#
+# toets = bytearray(5)
+# toets[1] = 5
+# print(toets)
 
-bytearr = np.empty(len(string),dtype=np.byte)
-for i in range(len(string)):
-    bytearr[i] = ord(string[i])
 
-bytearr[0] &= 0xFF
-print(bytearr)
+#Toets die key generation:
 
-toets = 0
+# initKey = bytearray([0x13,0x34,0x57,0x79,0x9B,0xBC,0xDF,0xF1])
+# permuteKey = [57,49,41,33,25,17,9,1,58,50,42,34,26,18,10,2,59,51,43,35,27,19,11,3,60,52,44,36,63,55,47,39,31,23,15,7,62,54,46,38,30,22,14,6,61,53,45,37,29,21,13,5,28,20,12,4]
+#
+# print(keyGeneration(initKey,permuteKey,[0]))
 
-stringEncoded = string.encode(encoding="ascii",errors="ignore")
-#print(stringEncoded)
-stringEncoded = bytearray(stringEncoded)
-stringEncoded[0] = stringEncoded[0]^255
-#print(stringEncoded)
+testkey = bytearray([0xF0,0xCC,0xAA,0xF5,0x56,0x67,0x8F])
+print(shiftKeyHalvesLeft(testkey,1))
 
-TDEA_Encrypt("Cat")
 
-permutationL = np.load("Practical 2 File Package/DES_Initial_Permutation.npy")
-permutationL = np.array(permutationL, dtype=int)
-print(permutationL)
 
-bytearr = bytearray("d",encoding="ascii")
-print(bytearr)
-
-print(permutation(bytearr, [3,4,7,6,5,2,8,1]))
-
-permutationChoice1 = np.load("Practical 2 File Package/DES_Permutation_Choice1.npy")
-print(permutationChoice1)
-print(len(permutationChoice1))
-
-bytearr = bytearray("de", encoding="ascii")
-print(shiftLeft(bytearray("hi", encoding="ascii"), 1))
-print("Hi")
-
-toets = bytearray(5)
-toets[1] = 5
-print(toets)
