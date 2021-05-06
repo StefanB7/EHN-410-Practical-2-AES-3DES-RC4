@@ -53,7 +53,7 @@ def DES_Encryption(plaintext, inspect_mode = 0, key = 0, ip = 0):
 
 
 #This helper function performs permutation on the bitarray according to the positions specified by
-#an permutation array, that contains the locatons where bits should be allocated in the permuted array
+#an permutation array, that contains the locations where bits should be allocated in the permutated array
 def permutation(bytearr, permutationArray):
     outputByteArray = bytearray(len(bytearr))
     permutationDec = np.arange(len(permutationArray))
