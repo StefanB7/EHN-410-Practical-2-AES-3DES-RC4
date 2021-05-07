@@ -62,6 +62,13 @@ def DES_Encryption(plaintext, subkeys,  ip = [0], inspect_mode = 0):
 
         newciphertextLHS = ciphertextRHS
 
+        newciphertextRHS = F(ciphertextRHSexpanded, subkeys[round])
+        for i in range(len(newciphertextRHS)):
+            newciphertextRHS[i] = newciphertextRHS[i] ^ ciphertextLHS[i]
+
+        print(status)
+        status = newciphertextLHS + newciphertextRHS
+
 
 
 
@@ -138,6 +145,10 @@ def F(RHS, subkey):
             output[group//2] = S[group][rowIndex][columnIndex] << 4
         else:
             output[group//2] = output[group//2] | S[group][rowIndex][columnIndex]
+
+    #Perform the final P permutation on the S-box outputs
+    finalPermutation = [16,7,20,21,29,12,28,17,1,15,23,26,5,18,31,10,2,8,24,14,32,27,3,9,19,13,30,6,22,11,4,25]
+    output = permutation(output, finalPermutation)
 
     return output
 
@@ -336,9 +347,9 @@ IP=[58,50,42,34,26,18,10,2,60,52,44,36,28,20,12,4,62,54,46,38,30,22,14,6,64,56,4
 
 plaintext = bytearray([0x01,0x23,0x45,0x67,0x89,0xAB,0xCD,0xEF])
 
-print(DES_Encryption(plaintext,subkeys,IP, 0))
+DES_Encryption(plaintext,subkeys,IP, 0)
 
 
 RHS = bytearray([0x7A,0x15,0x55,0x7A,0x15,0x55])
-print(F(RHS,subkeys[0]))
+#print(F(RHS,subkeys[0]))
 
