@@ -2,11 +2,6 @@
 # AES-256 (32 byte key) encryption and decryption (128 bit block size)
 # Group 7
 
-
-# expanded key bytes == 240
-
-# maak net seker orals waar ek plus en maal is dit wel in die GF(2^8)
-
 import numpy as np
  
 ############################ Main functions: ############################
@@ -18,8 +13,6 @@ def AES_Encrypt(inspect_mode, plaintext, iv, key, sbox_array):
     # key expansion
     bytes_key = keyExpansion(bytes_key,sbox_array)
 
-    # TODO: hmmm wat gaan ek doen by die decryption waar ek net die inverse sbox kry ?
-
     # Format the initialization vector
     iv = formatIV(iv, bytes_key)
 
@@ -27,6 +20,9 @@ def AES_Encrypt(inspect_mode, plaintext, iv, key, sbox_array):
     if type(plaintext) is not np.ndarray:
 
         plain_bytes = getBitsandPad(plaintext)
+
+        print("\nInput bytes: \n\n",plain_bytes.transpose().reshape(1,-1)[0])
+
         encrypted_bytes = None
 
         prev_block = iv
@@ -34,18 +30,19 @@ def AES_Encrypt(inspect_mode, plaintext, iv, key, sbox_array):
             
             bytes_block = plain_bytes[:,:4]
             plain_bytes = plain_bytes[:,4:]
-
-            ## Round 0:
+            
+            ## CBC step:
             # XOR input block with previous block, (IV for first block)
             bytes_block = XOR(bytes_block, prev_block)
-            
+
+            ## Round 0:            
             # Key selection from expansion
             k0 = bytes_key[:,0:4]
             # Add round key
             bytes_block = AddRoundKey(k0,bytes_block)
 
             ## Round 1 to 13:
-            for round in range(13):
+            for round in range(13):     
                 # Key selection from expansion
                 kn = bytes_key[:,4*round+4:4*round+8]
                 # SubBytes
@@ -105,27 +102,88 @@ def AES_Encrypt(inspect_mode, plaintext, iv, key, sbox_array):
 
 
 def AES_Decrypt(inspect_mode, ciphertext, iv, key, inv_sbox_array):
-    print("AES decryption")
-
+    
+    bytes_key = getBitsandPad(key, True)
+    
     # key expansion
+    bytes_key = keyExpansion(bytes_key,invert_sbox(inv_sbox_array))
+
+    # Format the initialization vector
+    iv = formatIV(iv, bytes_key)
 
     # plaintext decryption
-    if type(ciphertext) is not np.ndarray:
-        print("s")
+    if True: #type(ciphertext) is not np.ndarray:
 
+        cipher_bytes = ciphertext #getBitsandPad(ciphertext) !!!!!!!!! TODO: wat is die input vir die AES decryption
+        cipher_bytes = cipher_bytes.reshape(-1,4).transpose() # die word gewoonlink in die boonste funksie gedoen so dit gaan weg dalk
+
+        decrypted_bytes = None
+
+        prev_block = [iv]
+        
+        while cipher_bytes.shape[1] != 0:
+            
+            bytes_block = cipher_bytes[:,:4]
+            cipher_bytes = cipher_bytes[:,4:]
+
+            prev_block.append(bytes_block)
+
+            ## Round 0:
+            # Key selection from expansion
+            k0 = bytes_key[:,56:60]
+            # Add round key
+            bytes_block = AddRoundKey(k0,bytes_block)
+
+            ## Round 1 to 13:
+            for round in range(13):
+                # Key selection from expansion
+                kn = bytes_key[:,4*(12-round)+4:4*(12-round)+8]
+                # Inverse ShiftRows
+                bytes_block = inv_ShiftRows(bytes_block)
+                # Inverse SubBytes
+                bytes_block = inv_SubBytes(bytes_block,inv_sbox_array)
+                # AddRoundKey
+                bytes_block = AddRoundKey(kn,bytes_block)
+                # Inverse MixColumns
+                bytes_block = inv_MixColumns(bytes_block)
+            
+            ## Round 14:
+            # Key selection from expansion
+            k14 = bytes_key[:,0:4]
+            # Inverse ShiftRows
+            bytes_block = inv_ShiftRows(bytes_block)
+            # Inverse SubBytes
+            bytes_block = inv_SubBytes(bytes_block,inv_sbox_array)
+            # AddRoundKey
+            bytes_block = AddRoundKey(k14,bytes_block)
+
+            ## CBC step:
+            bytes_block = XOR(bytes_block,prev_block.pop(0))        
+
+            # save the decrypted block
+            if decrypted_bytes is None:
+                decrypted_bytes = bytes_block.reshape(1,-1)[0]
+            else:
+                decrypted_bytes = np.concatenate((decrypted_bytes,bytes_block.reshape(1,-1)[0]), axis=None)
+
+        return decrypted_bytes
+
+
+    # TODO: wat is the output van die AES encryption en wat is die ciphertext input vir die AES decryption 
+    # en hoe gaan mens die verskil sien tussen dit en n image?
     # image decryption
     else:
-        print("S")
+        print("Sdfsdf")
 
-    # Decryption:
+        # Decryption:
 
-    #     0 round: AddRoundKey
+        #     0 round: AddRoundKey
 
-    #     first 13 (N-1) rounds: Inv ShiftRows, Inv SubBytes, AddRoundKey, Inv MixColumns
+        #     first 13 (N-1) rounds: Inv ShiftRows, Inv SubBytes, AddRoundKey, Inv MixColumns
 
-    #     final (14) round: Inv ShiftRows, Inv SubBytes, AddRoundKey
+        #     final (14) round: Inv ShiftRows, Inv SubBytes, AddRoundKey
 
-    #     XOR output met die IV aan die begin, die volgende output word ge XOR met die vorige encrypted (ciphertext) blok
+        #     XOR output met die IV aan die begin, die volgende output word ge XOR met die vorige encrypted (ciphertext) blok
 
 
 ############################ Helper functions: ###########################
@@ -188,17 +246,58 @@ def MixColumns(arg):
 ###### Decryption helper functions:
 
 # Inverse of the substitution byte stage
-def inv_SubBytes():
-    print("d")
+def inv_SubBytes(arg,inv_sbox):
     # same as subbytes, just use the inverse s-box
+    # matrix output generated with stage mapped to s-box value
+    # 4 left bits indicate the row of s-box
+    # 4 right bits indicate the column of s-box
+
+    temp = np.zeros((4,4),dtype=np.ubyte)
+
+    for i in range(4):
+        for j in range(4):
+            # binary value of the argument
+            b = bin(arg[i,j])[2:].zfill(8)
+
+            # left 4 bits -> row
+            i_row = int(b[:4],2)
+            
+            # right 4 bits -> column
+            i_column = int(b[4:],2)
+
+            temp[i,j] = inv_sbox[i_row,i_column]
+
+    return temp
 
 # Inverse of the row shift stage
-def inv_ShiftRows():
-    print("d")
+def inv_ShiftRows(arg):
+    temp = np.zeros((4,4),np.ubyte)
+
+    # 1 byte circular right shift on second column
+    # 2 byte circular right shift on third column
+    # 3 byte circular right shift on fourth and final column
+    temp[0,:] = arg[0,:]
+    for i in range(1,4,1):
+        temp[i,:] = np.concatenate((arg[i,4-i:],arg[i,:4-i]),axis=None)
+    
+    return temp
 
 # Inverse of the column mix stage
-def inv_MixColumns():
-    print("d")
+def inv_MixColumns(arg):
+    # Dot product with the mix column matrix in the finite GF(2^8) field
+    # meaning multiply is done in GF(2^8) and addition is XOR
+
+    inv_m = np.array([[14, 11, 13, 9],[9, 14, 11, 13],[ 13, 9, 14, 11],[11, 13, 9, 14]])
+
+    temp = np.zeros((4,4), np.ubyte)
+
+    for i in range(4):
+        temp[0,i] = XOR(XOR(GF_mul(inv_m[0,0],arg[0,i]),GF_mul(inv_m[0,1],arg[1,i])),XOR(GF_mul(inv_m[0,2],arg[2,i]),GF_mul(inv_m[0,3],arg[3,i])))
+        temp[1,i] = XOR(XOR(GF_mul(inv_m[1,0],arg[0,i]),GF_mul(inv_m[1,1],arg[1,i])),XOR(GF_mul(inv_m[1,2],arg[2,i]),GF_mul(inv_m[1,3],arg[3,i])))
+        temp[2,i] = XOR(XOR(GF_mul(inv_m[2,0],arg[0,i]),GF_mul(inv_m[2,1],arg[1,i])),XOR(GF_mul(inv_m[2,2],arg[2,i]),GF_mul(inv_m[2,3],arg[3,i])))
+        temp[3,i] = XOR(XOR(GF_mul(inv_m[3,0],arg[0,i]),GF_mul(inv_m[3,1],arg[1,i])),XOR(GF_mul(inv_m[3,2],arg[2,i]),GF_mul(inv_m[3,3],arg[3,i])))
+
+    return temp
 
 ###### General helper functions:
 
@@ -280,14 +379,14 @@ def getBitsandPad(arg, key=False):
         if len(bits) != 32*(len(bits)//32):
             bits = np.concatenate((bits, np.zeros(32, dtype=np.ubyte)),axis=None)
             bits = bits[:32]
-            bits = bits.reshape(-1,4).transpose()
 
     # plaintext or image
     else:
         if len(bits) != 16*(len(bits)//16):
             bits = np.concatenate((bits, np.zeros(16, dtype=np.ubyte)),axis=None)
             bits = bits[:16*((len(bits)-16)//16)+16]
-            bits = bits.reshape(-1,4).transpose()
+    
+    bits = bits.reshape(-1,4).transpose()
 
     return bits
 
@@ -343,16 +442,69 @@ def GF_mul(arg1, arg2):
 
     return p
 
+# Used to invert the sbox
+def invert_sbox(arg):
 
-# a = np.array([15, 21, 113, 201, 71, 217, 232, 89, 12, 183, 173, 214, 175, 127, 103, 152, 15, 21, 113, 201, 71, 217, 232, 89, 12, 183, 173, 214, 175, 127, 103, 152])
+    temp = np.zeros((arg.shape[0],arg.shape[1]),np.ubyte)
+
+    for i in range(arg.shape[0]):
+        for j in range(arg.shape[1]):
+            # binary value of the argument
+            b = bin(arg[i,j])[2:].zfill(8)
+
+            # left 4 bits -> row
+            i_row = int(b[:4],2)
+            
+            # right 4 bits -> column
+            i_column = int(b[4:],2)
+            
+            temp[i_row,i_column] = int('0x'+str(hex(i)[2:])+str(hex(j)[2:]),16)
+
+    return temp
+
+
 
 sbox = np.load('jacobus\AES_Sbox_lookup.npy')
 
 sbox = sbox.reshape(1,-1)[0]
-
 sbox =  np.array([int(str(value), 16) for value in sbox],dtype=np.ubyte)
 sbox = sbox.reshape(16,16)
 
+
+inv_sbox = np.load('jacobus\AES_Inverse_Sbox_lookup.npy')
+inv_sbox = inv_sbox.reshape(1,-1)[0]
+inv_sbox =  np.array([int(str(value), 16) for value in inv_sbox],dtype=np.ubyte)
+inv_sbox = inv_sbox.reshape(16,16)
+
+
+iv = np.array([[1,2,3,4],[1,2,3,4],[1,2,3,4],[1,2,3,4]])
+
+print("iv ",iv)
+
+key = "12345678123456781234567812345678"
+input = "ABCDEFGHIJKLMNOP"
+
+print(len(input))
+
+enc_text = AES_Encrypt(False,input,iv,key, sbox)
+
+print("\nenc text: \n",enc_text)
+
+e = np.array([hex(value) for value in enc_text])
+
+print("\nhex enc text: \n",e)
+
+dec_text = AES_Decrypt(False,enc_text,iv,key,inv_sbox)
+
+print("\ndec text: \n",dec_text)
+
+dec_text = np.array([hex(value) for value in dec_text])
+
+print("\nhex dec text: \n",dec_text)
+
+
+
+# TODO: kyk of formatIV regitg random is????
 # r = keyExpansion(a,sbox)
 
 # r = r.reshape(1,-1)[0]
@@ -364,17 +516,30 @@ sbox = sbox.reshape(16,16)
 # print(r.transpose())
 
 
-enc_text = AES_Encrypt(False,"i met a man from an antique land who said two vast and trunkless legs stand in the dessert",None,"ozymandius deur percy", sbox)
+# enc_text = AES_Encrypt(False,"i met a man from an antique land who said two vast and trunkless legs stand in the dessert",None,"ozymandius deur percy", sbox)
 
-print(enc_text)
+# print(enc_text)
 
-enc_text =  np.array([chr(value) for value in enc_text])
+# enc_text =  np.array([chr(value) for value in enc_text])
 
-print(enc_text)
+# print(enc_text)
 
-#print(getBitsandPad("ABCDE", True))
-#getBitsandPad("AB é")
 
+# print(sbox)
+
+# s = invert_sbox(sbox)
+
+# print('\n')
+# print(s)
+# print('\n')
+
+# s = s.reshape(1,-1)[0]
+
+# s = np.array([hex(value) for value in s])
+
+# s = s.reshape(16,16)
+
+# print(s)
 
 
 
@@ -391,8 +556,7 @@ print(enc_text)
 
 # s = "haai"
 
-#print(bytearray(s.encode(encoding="ascii",errors="ignore"))[1])
-
+# print(bytearray(s.encode(encoding="ascii",errors="ignore"))[1])
 
 
 
