@@ -8,10 +8,15 @@ import numpy as np
 
 def AES_Encrypt(inspect_mode, plaintext, iv, key, sbox_array):
 
-    bytes_key = getBitsandPad(key, True)
+    # bytes_key = getBitsandPad(key, True)
     
     # key expansion
-    bytes_key = keyExpansion(bytes_key,sbox_array)
+    kk = np.array([15, 71, 12, 175, 21, 217, 183, 127, 113, 232, 173, 103, 201, 89, 214, 152])
+    kk = kk.reshape(-1,4).transpose()
+    bytes_key = keyExpansion(kk,sbox_array)
+    
+    print("\n\n Expanded key:\n\n")
+    print(np.array([hex(value)[2:] for value in bytes_key.reshape(1,-1)[0]]).reshape(4,-1))
 
     # Format the initialization vector
     iv = formatIV(iv, bytes_key)
@@ -19,32 +24,40 @@ def AES_Encrypt(inspect_mode, plaintext, iv, key, sbox_array):
     # plaintext encryption
     if type(plaintext) is not np.ndarray:
 
-        plain_bytes = getBitsandPad(plaintext)
+        plain_bytes = np.array([1, 137, 254, 118, 35, 171, 220, 84, 69, 205, 186, 50, 103, 239, 152, 16]) #getBitsandPad(plaintext)
 
-        print("\nInput bytes: \n\n",plain_bytes.reshape(1,-1)[0])
+        plain_bytes = plain_bytes.reshape(4,4) #hier moet nie n transpose wees nie, dis dalk hier waar my fout was
+
+        print("\nInput bytes: \n\n",plain_bytes.transpose().reshape(1,-1)[0])
 
         encrypted_bytes = None
 
         prev_block = iv
-        while plain_bytes.shape[0] != 0:
+        while plain_bytes.shape[1] != 0:
             
-            bytes_block = plain_bytes[:4,:]
-            plain_bytes = plain_bytes[4:,:]
+            bytes_block = plain_bytes[:,:4]
+            
+            print("\n\n start: \n", np.array([hex(value)[2:] for value in bytes_block.reshape(1,-1)[0]]).reshape(4,4))
+
+            plain_bytes = plain_bytes[:,4:]
             
             ## CBC step:
             # XOR input block with previous block, (IV for first block)
-            bytes_block = XOR(bytes_block, prev_block)
+            # bytes_block = XOR(bytes_block, prev_block)
 
             ## Round 0:            
             # Key selection from expansion
             k0 = bytes_key[:,0:4]
+            print("\n\n key: \n", np.array([hex(value)[2:] for value in k0.reshape(1,-1)[0]]).reshape(4,4))
             # Add round key
             bytes_block = AddRoundKey(k0,bytes_block)
 
             ## Round 1 to 13:
-            for round in range(13):     
+            for round in range(9):     
+                print("\n\n start: \n", np.array([hex(value)[2:] for value in bytes_block.reshape(1,-1)[0]]).reshape(4,4))
                 # Key selection from expansion
                 kn = bytes_key[:,4*round+4:4*round+8]
+                print("\n\n key: \n", np.array([hex(value)[2:] for value in kn.reshape(1,-1)[0]]).reshape(4,4))
                 # SubBytes
                 bytes_block = SubBytes(bytes_block,sbox_array)
                 # ShiftRows
@@ -54,15 +67,22 @@ def AES_Encrypt(inspect_mode, plaintext, iv, key, sbox_array):
                 # AddRoundKey
                 bytes_block = AddRoundKey(kn,bytes_block)
 
+            print("\n\n start: \n", np.array([hex(value)[2:] for value in bytes_block.reshape(1,-1)[0]]).reshape(4,4))
             ## Round 14 (final):
             # Key selection form expansion
-            k14 = bytes_key[:,56:60]
+            k14 = bytes_key[:,40:44]
+            print("\n\n keynnnn: \n", np.array([hex(value)[2:] for value in k14.reshape(1,-1)[0]]).reshape(4,4))
             # SubBytes
             bytes_block = SubBytes(bytes_block,sbox_array)
             # ShiftRows
             bytes_block = ShiftRows(bytes_block)
+
+            # daar moet nie n mix columsn wees nie :|
+
             # AddRoundKey
             bytes_block = AddRoundKey(k14,bytes_block)
+
+            print("\n\n start: \n", np.array([hex(value)[2:] for value in bytes_block.reshape(1,-1)[0]]).reshape(4,4))
 
             # Save previous encrypted block for CBC (Cipher block chaining)
             prev_block = bytes_block
@@ -113,16 +133,16 @@ def AES_Decrypt(inspect_mode, ciphertext, iv, key, inv_sbox_array):
     if True: #type(ciphertext) is not np.ndarray:
 
         cipher_bytes = ciphertext #getBitsandPad(ciphertext) !!!!!!!!! TODO: wat is die input vir die AES decryption
-        cipher_bytes = cipher_bytes.reshape(-1,4)
+        cipher_bytes = cipher_bytes.reshape(-1,4).transpose() # die word gewoonlink in die boonste funksie gedoen so dit gaan weg dalk
 
         decrypted_bytes = None
 
         prev_block = [iv]
         
-        while cipher_bytes.shape[0] != 0:
+        while cipher_bytes.shape[1] != 0:
             
-            bytes_block = cipher_bytes[:4,:]
-            cipher_bytes = cipher_bytes[4:,:]
+            bytes_block = cipher_bytes[:,:4]
+            cipher_bytes = cipher_bytes[:,4:]
 
             prev_block.append(bytes_block)
 
@@ -306,20 +326,20 @@ def AddRoundKey(arg1,arg2):
 # Expand the key for each round
 def keyExpansion(key,sbox):
     
-    w = np.zeros((4,60), dtype=np.ubyte)
+    w = np.zeros((4,44), dtype=np.ubyte)
 
     # set the first values of w equal to the key
-    temp_key = np.transpose(key.reshape(8,4))
-    w[:4,:8] = temp_key
+    temp_key = np.transpose(key.reshape(4,4))
+    w[:4,:4] = temp_key
 
-    for i in range(8,60,1):
+    for i in range(4,44,1):
         temp = w[:,i-1]
-        if i % 8 == 0:
+        if i % 4 == 0:
             # print("rcon : ", k_Rcon(int(i/8)))
-            temp = XOR(k_SubWord(k_RotWord(temp),sbox),k_Rcon(int(i/8)))
+            temp = XOR(k_SubWord(k_RotWord(temp),sbox),k_Rcon(int(i/4)))
             # print("XOR : ", np.array([hex(value) for value in temp]))
         
-        w[:,i] = XOR(w[:,i-8],temp)
+        w[:,i] = XOR(w[:,i-4],temp)
     
     return w
 
@@ -374,17 +394,17 @@ def getBitsandPad(arg, key=False):
     # pad bits if necessary
     # key, key will be concatenated if larger than 32 bytes
     if key == True:
-        if len(bits) != 32*(len(bits)//32):
-            bits = np.concatenate((bits, np.zeros(32, dtype=np.ubyte)),axis=None)
-            bits = bits[:32]
+        if len(bits) != 16*(len(bits)//16):
+            bits = np.concatenate((bits, np.zeros(16, dtype=np.ubyte)),axis=None)
+            bits = bits[:16]
 
-        bits = bits.reshape(-1,4).transpose()
     # plaintext or image
     else:
         if len(bits) != 16*(len(bits)//16):
             bits = np.concatenate((bits, np.zeros(16, dtype=np.ubyte)),axis=None)
             bits = bits[:16*((len(bits)-16)//16)+16]
-        bits = bits.reshape(-1,4)
+    
+    bits = bits.reshape(-1,4).transpose()
 
     return bits
 
@@ -475,30 +495,48 @@ inv_sbox =  np.array([int(str(value), 16) for value in inv_sbox],dtype=np.ubyte)
 inv_sbox = inv_sbox.reshape(16,16)
 
 
-iv = np.array([[1,2,3,4],[1,2,3,4],[1,2,3,4],[1,2,3,4]])
+# key = "1234567812345678"
+# input = "ABCDEFGHIJKLMNOP"
 
-print("iv ",iv)
+# print(len(input))
 
-key = "12345678123456781234567812345678"
-input = "ABCDEFGHIJKLMNOP"
+# enc_text = AES_Encrypt(False,input,None,key, sbox)
 
-print(len(input))
+# print("\nenc text: \n",enc_text)
 
-enc_text = AES_Encrypt(False,input,iv,key, sbox)
+# e = np.array([hex(value) for value in enc_text])
 
-print("\nenc text: \n",enc_text)
+# print("\nhex enc text: \n",e)
 
-e = np.array([hex(value) for value in enc_text])
 
-print("\nhex enc text: \n",e)
+# dec_text = AES_Decrypt(False,enc_text,None,key,inv_sbox)
 
-dec_text = AES_Decrypt(False,enc_text,iv,key,inv_sbox)
+# print("\ndec text: \n",dec_text)
 
-print("\ndec text: \n",dec_text)
+# dec_text = np.array([hex(value) for value in dec_text])
 
-dec_text = np.array([hex(value) for value in dec_text])
+# print("\nhex dec text: \n",dec_text)
 
-print("\nhex dec text: \n",dec_text)
+['f', '47', 'c', 'af', 'dc', '9b' ,'97', '38', 'd2', '49' ,'de' ,'e6' ,'c0' ,'89'
+  '57' 'b1' '2c' 'a5' 'f2' '43' '58' 'fd' 'f' '4c' '71' '8c' '83' 'cf'
+  '37' 'bb' '38' 'f7' '48' 'f3' 'cb' '3c' 'fd' 'e' 'c5' 'f9'] 
+
+
+
+# i = [0x01, 0x89, 0xfe, 0x76, 0x23, 0xab, 0xdc, 0x54, 0x45, 0xcd, 0xba, 0x32, 0x67, 0xef, 0x98, 0x10]
+
+# i = np.array([(value) for value in i])
+
+# print(str(i))
+
+# i = [0x0f, 0x47, 0x0c, 0xaf, 0x15, 0xd9, 0xb7, 0x7f, 0x71, 0xe8, 0xad, 0x67, 0xc9, 0x59, 0xd6, 0x98]
+
+# print(i)
+
+
+
+e = AES_Encrypt(False,'a',None,None,sbox)
+
 
 
 
@@ -550,7 +588,7 @@ print("\nhex dec text: \n",dec_text)
 # verduidelik in report hkm rijndael cool is want input bits is nie baie dieselfde as output bits nie kan dit vergelyk dalk met ander s-boxes,
 #  en nie linear nie, check verwysing op bladsy 185
 
-# byte = int('11111111'​【3 387 km】, 2)
+# byte = int('11111111', 2)
 
 # s = "haai"
 
