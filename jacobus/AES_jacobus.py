@@ -603,13 +603,13 @@ inv_sbox = inv_sbox.reshape(16, 16)
 
 key = "Picture test!"
 
-input = img2array('einstein.png')
+input = img2array('red.png')
 
 start = time.time()
 enc_img = AES_Encrypt(False, input, None, key, sbox)
 end = time.time()
 
-array2img(enc_img,"einstein_enc.png")
+array2img(enc_img,"red_enc.png")
 
 print(end-start)
 
