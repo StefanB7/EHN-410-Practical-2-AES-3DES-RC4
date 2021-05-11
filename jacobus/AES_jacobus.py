@@ -4,6 +4,7 @@
 
 import numpy as np
 from PIL import Image
+import time
 
 ############################ Main functions: ############################
 
@@ -14,12 +15,21 @@ def AES_Encrypt(inspect_mode, plaintext, arg_iv, key, sbox_array):
     encrypted_bytes1 = None
     encrypted_bytes2 = None
 
+    iblocks = 0
+    # flag indicating not all blocks were encrypted
+    imgFlag = False
+
+    # number of data bytes not encrypted
+    imgFlagNumber = 0
+
     # Prepare byte matrix for plaintext encryption
     if type(plaintext) is not np.ndarray:
 
         # First dimension is for plain text or Red channel, second for Green channel and third for Blue channel
         plain_bytes = [getBitsandPad(plaintext)]
 
+        # how many blocks there is to encrypt
+        iblocks = plain_bytes[0].shape[0] // 4 
 
     # # Prepare byte matrix for image encryption
     else:
@@ -31,6 +41,13 @@ def AES_Encrypt(inspect_mode, plaintext, arg_iv, key, sbox_array):
         g_channel = np.array(P[:,:,1]).reshape(1,P[:,:,1].shape[0]*P[:,:,1].shape[1])[0]
         b_channel = np.array(P[:,:,2]).reshape(1,P[:,:,2].shape[0]*P[:,:,2].shape[1])[0]
 
+        iblocks = len(r_channel) // 16
+
+        # check if not all blocks will be encrypted
+        if len(r_channel) != 16 * (len(r_channel) // 16):
+            imgFlag = True
+            imgFlagNumber = len(r_channel) - (16 * (len(r_channel) // 16))
+        
         plain_bytes = [getBitsandPad(r_channel, False, True),getBitsandPad(g_channel, False, True),getBitsandPad(b_channel, False, True)]
 
     
@@ -47,9 +64,8 @@ def AES_Encrypt(inspect_mode, plaintext, arg_iv, key, sbox_array):
         iv = formatIV(arg_iv, bytes_key)
 
         prev_block = iv
-        while plain_bytes[i].shape[0] != 0:
+        for blocks in range(iblocks):
             
-
             bytes_block = plain_bytes[i][:4, :]
             plain_bytes[i] = np.array(plain_bytes[i][4:, :])
 
@@ -108,6 +124,23 @@ def AES_Encrypt(inspect_mode, plaintext, arg_iv, key, sbox_array):
                 else:
                     encrypted_bytes2 = np.concatenate((encrypted_bytes2, np.array(bytes_block.reshape(1, -1)[0])), axis=None)
 
+        # Pixels that did not fit within the cipher block size
+        # XOR with first encrypted block
+        if imgFlag:
+
+            r_left = np.array(P[:,:,0]).reshape(1,P[:,:,0].shape[0]*P[:,:,0].shape[1])[0]            
+            g_left = np.array(P[:,:,1]).reshape(1,P[:,:,1].shape[0]*P[:,:,1].shape[1])[0]
+            b_left = np.array(P[:,:,2]).reshape(1,P[:,:,2].shape[0]*P[:,:,2].shape[1])[0]
+
+            r_left = r_left[len(r_left)-imgFlagNumber:]
+            g_left = g_left[len(g_left)-imgFlagNumber:]
+            b_left = b_left[len(b_left)-imgFlagNumber:]
+           
+
+            encrypted_bytes0 = np.concatenate((encrypted_bytes0, XOR(encrypted_bytes0[:imgFlagNumber],r_left)), axis=None)
+            encrypted_bytes1 = np.concatenate((encrypted_bytes1, XOR(encrypted_bytes1[:imgFlagNumber],g_left)), axis=None)
+            encrypted_bytes2 = np.concatenate((encrypted_bytes2, XOR(encrypted_bytes2[:imgFlagNumber],b_left)), axis=None)
+            
 
     if encrypted_bytes2 is None:
         return encrypted_bytes0
@@ -570,24 +603,19 @@ inv_sbox = inv_sbox.reshape(16, 16)
 
 key = "Picture test!"
 
-input = img2array('office.png')
+input = img2array('einstein.png')
 
-
+start = time.time()
 enc_img = AES_Encrypt(False, input, None, key, sbox)
+end = time.time()
 
-array2img(enc_img,"office_enc.png")
+array2img(enc_img,"einstein_enc.png")
 
-
-
-
-
+print(end-start)
 
 
 
-
-
-
-
+# TODO: kan dalk maak dat plaas van while loop en die byte array heeltyd kleiner maak, net deur dit scroll
 
 # TODO: hoe werk die IV
 # TODO: kyk of formatIV regitg random is????
