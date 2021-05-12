@@ -15,7 +15,9 @@ def AES_Encrypt(inspect_mode, plaintext, arg_iv, key, sbox_array):
     encrypted_bytes1 = None
     encrypted_bytes2 = None
 
+    # how many blocks to encrypt
     iblocks = 0
+
     # flag indicating not all blocks were encrypted
     imgFlag = False
 
@@ -136,14 +138,13 @@ def AES_Encrypt(inspect_mode, plaintext, arg_iv, key, sbox_array):
             g_left = g_left[len(g_left)-imgFlagNumber:]
             b_left = b_left[len(b_left)-imgFlagNumber:]
            
-
             encrypted_bytes0 = np.concatenate((encrypted_bytes0, XOR(encrypted_bytes0[:imgFlagNumber],r_left)), axis=None)
             encrypted_bytes1 = np.concatenate((encrypted_bytes1, XOR(encrypted_bytes1[:imgFlagNumber],g_left)), axis=None)
             encrypted_bytes2 = np.concatenate((encrypted_bytes2, XOR(encrypted_bytes2[:imgFlagNumber],b_left)), axis=None)
             
 
     if encrypted_bytes2 is None:
-        return encrypted_bytes0
+        return encrypted_bytes0 # text of np array ????????????? TODO:
     else:
         
         encrypted_bytes0 = encrypted_bytes0.reshape(P[:,:,0].shape[0],P[:,:,0].shape[1])
@@ -161,29 +162,71 @@ def AES_Encrypt(inspect_mode, plaintext, arg_iv, key, sbox_array):
 
 def AES_Decrypt(inspect_mode, ciphertext, iv, key, inv_sbox_array):
 
-    bytes_key = getBitsandPad(key, True)
+    decrypted_bytes0 = None
+    decrypted_bytes1 = None
+    decrypted_bytes2 = None
 
-    # key expansion
-    bytes_key = keyExpansion(bytes_key, invert_sbox(inv_sbox_array))
+    # how many blocks to encrypt
+    iblocks = 0
 
-    # Format the initialization vector
-    iv = formatIV(iv, bytes_key)
+    # flag indicating not all blocks were encrypted
+    imgFlag = False
 
-    # plaintext decryption
-    if True:  # type(ciphertext) is not np.ndarray:
+    # number of data bytes not encrypted
+    imgFlagNumber = 0
 
-        # getBitsandPad(ciphertext) !!!!!!!!! TODO: wat is die input vir die AES decryption
-        cipher_bytes = ciphertext
-        cipher_bytes = cipher_bytes.reshape(-1, 4)
+    # first cipher block of RGB for decrypting final bits that did not fit into a block
+    firstCipherBlock = None
 
-        decrypted_bytes = None
+    # Prepare byte matrix for ciphertext decryption
+    if type(ciphertext) is not np.ndarray:
+        
+        # First dimension is for plain text or Red channel, second for Green channel and third for Blue channel
+        cipher_bytes = [getBitsandPad(ciphertext)]
+
+        # how many blocks there is to encrypt
+        iblocks = cipher_bytes[0].shape[0] // 4 
+
+
+    # Prepare byte matrix for image decryption
+    else:
+
+        # exctract RGB
+        C = ciphertext
+        
+        r_channel = np.array(C[:,:,0]).reshape(1,C[:,:,0].shape[0]*C[:,:,0].shape[1])[0]
+        g_channel = np.array(C[:,:,1]).reshape(1,C[:,:,1].shape[0]*C[:,:,1].shape[1])[0]
+        b_channel = np.array(C[:,:,2]).reshape(1,C[:,:,2].shape[0]*C[:,:,2].shape[1])[0]
+
+        iblocks = len(r_channel) // 16
+
+        # check if not all blocks will be encrypted
+        if len(r_channel) != 16 * (len(r_channel) // 16):
+            imgFlag = True
+            imgFlagNumber = len(r_channel) - (16 * (len(r_channel) // 16))
+            firstCipherBlock = [r_channel[:imgFlagNumber],g_channel[:imgFlagNumber],b_channel[:imgFlagNumber]]
+
+        cipher_bytes = [getBitsandPad(r_channel, False, True),getBitsandPad(g_channel, False, True),getBitsandPad(b_channel, False, True)]
+
+
+    for i in range(len(cipher_bytes)):
+        
+        print("DDDDDDDDDDDDDDDDDDD: ", i)
+
+        bytes_key = getBitsandPad(key, True)
+
+        # key expansion
+        bytes_key = keyExpansion(bytes_key, invert_sbox(inv_sbox_array))
+
+        # Format the initialization vector
+        iv = formatIV(iv, bytes_key)
 
         prev_block = [iv]
 
-        while cipher_bytes.shape[0] != 0:
+        for blocks in range(iblocks):
 
-            bytes_block = cipher_bytes[:4, :]
-            cipher_bytes = cipher_bytes[4:, :]
+            bytes_block = cipher_bytes[i][:4, :]
+            cipher_bytes[i] = np.array(cipher_bytes[i][4:, :])
 
             prev_block.append(bytes_block)
 
@@ -218,31 +261,60 @@ def AES_Decrypt(inspect_mode, ciphertext, iv, key, inv_sbox_array):
 
             # CBC step:
             bytes_block = XOR(bytes_block, prev_block.pop(0))
-
-            # save the decrypted block
-            if decrypted_bytes is None:
-                decrypted_bytes = bytes_block.reshape(1, -1)[0]
+            
+            # save the encrypted block
+            if i == 0:                    
+                if decrypted_bytes0 is None:
+                    decrypted_bytes0 = np.array(bytes_block.reshape(1, -1)[0])
+                else:
+                    decrypted_bytes0 = np.concatenate((decrypted_bytes0, np.array(bytes_block.reshape(1, -1)[0])), axis=None)
+            elif i == 1:
+                if decrypted_bytes1 is None:
+                    decrypted_bytes1 = np.array(bytes_block.reshape(1, -1)[0])
+                else:
+                    decrypted_bytes1 = np.concatenate((decrypted_bytes1, np.array(bytes_block.reshape(1, -1)[0])), axis=None)
             else:
-                decrypted_bytes = np.concatenate(
-                    (decrypted_bytes, bytes_block.reshape(1, -1)[0]), axis=None)
+                if decrypted_bytes2 is None:
+                    decrypted_bytes2 = np.array(bytes_block.reshape(1, -1)[0])
+                else:
+                    decrypted_bytes2 = np.concatenate((decrypted_bytes2, np.array(bytes_block.reshape(1, -1)[0])), axis=None)
 
-        return decrypted_bytes
+
+        # Pixels that did not fit within the cipher block size
+        # XOR with first encrypted block
+        if imgFlag:
+            r_left = np.array(C[:,:,0]).reshape(1,C[:,:,0].shape[0]*C[:,:,0].shape[1])[0]            
+            g_left = np.array(C[:,:,1]).reshape(1,C[:,:,1].shape[0]*C[:,:,1].shape[1])[0]
+            b_left = np.array(C[:,:,2]).reshape(1,C[:,:,2].shape[0]*C[:,:,2].shape[1])[0]
+
+            r_left = r_left[len(r_left)-imgFlagNumber:]
+            g_left = g_left[len(g_left)-imgFlagNumber:]
+            b_left = b_left[len(b_left)-imgFlagNumber:]
+           
+            decrypted_bytes0 = np.concatenate((decrypted_bytes0, XOR(firstCipherBlock[0],r_left)), axis=None)
+            decrypted_bytes1 = np.concatenate((decrypted_bytes1, XOR(firstCipherBlock[1],g_left)), axis=None)
+            decrypted_bytes2 = np.concatenate((decrypted_bytes2, XOR(firstCipherBlock[2],b_left)), axis=None)
+            
+
+
+    if decrypted_bytes2 is None:
+        return decrypted_bytes0 # text of np array ????????????? TODO:
+    else:
+        
+        decrypted_bytes0 = decrypted_bytes0.reshape(C[:,:,0].shape[0],C[:,:,0].shape[1])
+        decrypted_bytes1 = decrypted_bytes1.reshape(C[:,:,1].shape[0],C[:,:,1].shape[1])
+        decrypted_bytes2 = decrypted_bytes2.reshape(C[:,:,2].shape[0],C[:,:,2].shape[1])
+
+
+        if ciphertext.shape[2] == 4:
+            alpha_layer = np.array(ciphertext[:,:,3])
+            return np.dstack((decrypted_bytes0.astype(int),decrypted_bytes1.astype(int),decrypted_bytes2.astype(int),alpha_layer.astype(int)))
+        else:
+            return np.dstack((decrypted_bytes0.astype(int),decrypted_bytes1.astype(int),decrypted_bytes2.astype(int)))
+
 
     # TODO: wat is the output van die AES encryption en wat is die ciphertext input vir die AES decryption
     # en hoe gaan mens die verskil sien tussen dit en n image?
-    # image decryption
-    else:
-        print("Sdfsdf")
-
-        # Decryption:
-
-        #     0 round: AddRoundKey
-
-        #     first 13 (N-1) rounds: Inv ShiftRows, Inv SubBytes, AddRoundKey, Inv MixColumns
-
-        #     final (14) round: Inv ShiftRows, Inv SubBytes, AddRoundKey
-
-        #     XOR output met die IV aan die begin, die volgende output word ge XOR met die vorige encrypted (ciphertext) blok
 
 
 ############################ Helper functions: ###########################
@@ -603,15 +675,24 @@ inv_sbox = inv_sbox.reshape(16, 16)
 
 key = "Picture test!"
 
-input = img2array('red.png')
+input = img2array('einstein.png')
 
 start = time.time()
 enc_img = AES_Encrypt(False, input, None, key, sbox)
 end = time.time()
 
-array2img(enc_img,"red_enc.png")
+print("encryption: ",end-start)
 
-print(end-start)
+array2img(enc_img,"einstein_enc.png")
+
+
+start = time.time()
+dec_img = AES_Decrypt(False,enc_img,None,key,inv_sbox)
+end = time.time()
+
+array2img(dec_img,"einstein_dec.png")
+
+print("decryption: ",end-start)
 
 
 
