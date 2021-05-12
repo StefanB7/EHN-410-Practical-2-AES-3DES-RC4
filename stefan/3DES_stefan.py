@@ -6,31 +6,182 @@
 import numpy as np
 import copy
 
+##### STATIC VARIABLES #####
+
+keyInitialPermutationLocation = "Practical 2 File Package/DES_Permutation_Choice1.npy"
+keyRoundPermutationLocation = "Practical 2 File Package/DES_Permutation_Choice2.npy"
+
 ##### MAIN CIPHER FUNCTIONS #####
 
-def TDEA_Encrypt(plaintext, inspect_mode = 0, key1 = 0, key2 = 0, key3 = 0, ip = 0):
+def TDEA_Encrypt(plaintext, inspect_mode = 0, key1 = 0, key2 = 0, key3 = 0, ip = [0]):
     print("3DES Encryption")
+
+    # Calculate the inverse of the initial permutation:
+    inv_ip = np.zeros(len(ip))
+    for i in range(1, len(ip) + 1):
+        # Find index i in the initial permutation:
+        inv_ip[i - 1] = ip.index(i) + 1
 
     ### Plaintext Encoding ###
 
     # If the plaintext is a string to be encrypted:
     if (isinstance(plaintext, str)):
         # Convert the plaintext string to its bit representation
-        plaintextEncoded = plaintext.encode(encoding="ascii",errors="ignore")
-        plaintextEncoded = bytearray(plaintextEncoded)
+        #plaintextEncoded = plaintext.encode(encoding="ascii",errors="ignore")
+        # plaintextEncoded = bytearray(plaintextEncoded)
+        plaintextEncoded = chartobyte(plaintext)
 
         #Pad the plaintext such that the total number of bytes is an integral multiple of 64 (for DES)
         plaintextEncoded = pad(plaintextEncoded, 64)
 
+        #Divide the encoded plaintext into blocks of 64 bits each, to be encoded:
+        plaintextBlocks = [bytearray(1)]*(len(plaintextEncoded)//64)
+        for i in range(len(plaintextEncoded)//64):
+            plaintextBlocks[i] = plaintextEncoded[i*64:(i+1)*64]
 
-        
-        print("-----")
-        print(plaintextEncoded)
-        print(pad(plaintextEncoded,5))
+        #Permutation arrays used for key generation:
+        keyInitialPermutation = np.load(keyInitialPermutationLocation)
+        keyRoundPermutation = np.load(keyRoundPermutationLocation)
+
+        status = [bytearray(1)]*(len(plaintextEncoded)//64)
+
+        # ============================================
+        #First triple DES round, encryption with key1:
+
+        #Generate the subkeys:
+        key1bytes = chartobyte(key1)
+        subkeys = keyGeneration(key1bytes, keyInitialPermutation, keyRoundPermutation)
+
+        #Perform first DES encryption on all blocks of 64 bits:
+        for index in range(len(plaintextBlocks)):
+            status[index], roundOutputEncryption1 = DES_Encryption(plaintextBlocks[index], subkeys, ip, inv_ip, inspect_mode)
 
 
-def TDEA_Decrypt(inspect_mode, ciphertext, key1, key2, key3, inv_ip):
+
+        #Second triple DES round, decryption with key2:
+
+        #Generate the subkeys:
+        key2bytes = chartobyte(key2)
+        subkeys = keyGeneration(key2bytes, keyInitialPermutation, keyRoundPermutation)
+
+        #The subkeys should be swapped for decryption:
+        subKeyTemp = copy.deepcopy(subkeys)
+        subkeys = []
+        for i in range(len(subKeyTemp)-1,-1,-1):
+           subkeys.append(subKeyTemp[i])
+
+        for index in range(len(status)):
+            status[index], roundOutputDecryption = DES_Decryption(status[index], subkeys, ip, inv_ip, inspect_mode)
+
+
+        #Third and final triple DES round, encryption with key3:
+
+        #Generate the subkeys:
+        key3bytes = chartobyte(key3)
+        subkeys = keyGeneration(key3bytes, keyInitialPermutation, keyRoundPermutation)
+
+        #Perform final DES encryption on all blocks of 64 bits:
+        for index in range(len(status)):
+            status[index], roundOutputEncryption2 = DES_Encryption(status[index], subkeys, ip, inv_ip, inspect_mode)
+
+        print(status)
+
+        ciphertextOutput = ""
+        #Convert to and return chars
+        for blockIndex in range(len(status)):
+            for charIndex in range(8):
+                ciphertextOutput = ciphertextOutput + chr(status[blockIndex][charIndex])
+
+        return ciphertextOutput
+
+
+
+
+def TDEA_Decrypt(inspect_mode, ciphertext, key1, key2, key3, ip):
     print("3DES Decryption")
+
+    # Calculate the inverse of the initial permutation:
+    inv_ip = np.zeros(len(ip))
+    for i in range(1, len(ip) + 1):
+        # Find index i in the initial permutation:
+        inv_ip[i - 1] = ip.index(i) + 1
+
+    ### Plaintext Encoding ###
+
+    # If the plaintext is a string to be encrypted:
+    if (isinstance(ciphertext, str)):
+        # Convert the ciphertext string to its bit representation
+        #ciphertextEncoded = plaintext.encode(encoding="ascii",errors="ignore")
+        # ciphertextEncoded = bytearray(ciphertextEncoded)
+        ciphertextEncoded = chartobyte(ciphertext)
+
+        #Pad the ciphertext such that the total number of bytes is an integral multiple of 64 (for DES)
+        ciphertextEncoded = pad(ciphertextEncoded, 64)
+
+        #Divide the encoded ciphertext into blocks of 64 bits each, to be encoded:
+        ciphertextBlocks = [bytearray(1)]*(len(ciphertextEncoded)//64)
+        for i in range(len(ciphertextEncoded)//64):
+            ciphertextBlocks[i] = ciphertextEncoded[i*64:(i+1)*64]
+
+        #Permutation arrays used for key generation:
+        keyInitialPermutation = np.load(keyInitialPermutationLocation)
+        keyRoundPermutation = np.load(keyRoundPermutationLocation)
+
+        status = [bytearray(1)]*(len(ciphertextEncoded)//64)
+
+        # ============================================
+        #First triple DES round, decryption with key1:
+
+        #Generate the subkeys:
+        key3bytes = chartobyte(key3)
+        subkeys = keyGeneration(key3bytes, keyInitialPermutation, keyRoundPermutation)
+
+        #The subkeys should be swapped for decryption:
+        subKeyTemp = copy.deepcopy(subkeys)
+        subkeys = []
+        for i in range(len(subKeyTemp)-1,-1,-1):
+           subkeys.append(subKeyTemp[i])
+
+        #Perform first DES encryption on all blocks of 64 bits:
+        for index in range(len(ciphertextBlocks)):
+            status[index], roundOutputDecryption1 = DES_Decryption(ciphertextBlocks[index], subkeys, ip, inv_ip, inspect_mode)
+
+
+        #Second triple DES round, encryption with key2:
+
+        #Generate the subkeys:
+        key2bytes = chartobyte(key2)
+        subkeys = keyGeneration(key2bytes, keyInitialPermutation, keyRoundPermutation)
+
+        for index in range(len(status)):
+            status[index], roundOutputEncryption = DES_Encryption(status[index], subkeys, ip, inv_ip, inspect_mode)
+
+
+        #Third and final triple DES round, encryption with key3:
+
+        #Generate the subkeys:
+        key1bytes = chartobyte(key1)
+        subkeys = keyGeneration(key1bytes, keyInitialPermutation, keyRoundPermutation)
+
+        #The subkeys should be swapped for decryption:
+        subKeyTemp = copy.deepcopy(subkeys)
+        subkeys = []
+        for i in range(len(subKeyTemp)-1,-1,-1):
+           subkeys.append(subKeyTemp[i])
+
+        #Perform final DES encryption on all blocks of 64 bits:
+        for index in range(len(status)):
+            status[index], roundOutputDecryption2 = DES_Encryption(status[index], subkeys, ip, inv_ip, inspect_mode)
+
+        print(status)
+
+        plaintextOutput = ""
+        #Convert to and return chars
+        for blockIndex in range(len(status)):
+            for charIndex in range(8):
+                plaintextOutput = plaintextOutput + chr(status[blockIndex][charIndex])
+
+        return plaintextOutput
 
 
 ###### HELPER FUNCTIONS #####
@@ -46,11 +197,13 @@ def pad(bytearr, integral_number = 64, padding = 0x00):
     return bytearrayOutput
 
 #This functions performs normal DES encryption:
-def DES_Encryption(plaintext, subkeys,  ip = [0], inspect_mode = 0):
+def DES_Encryption(plaintext, subkeys,  ip = [0], inv_ip = [0], inspect_mode = 0):
     status = copy.deepcopy(plaintext)
 
     #Do the initial permutation
     status = permutation(status, ip)
+
+    roundOutputs = []
 
     #Iterate over 16 rounds:
     for round in range(16):
@@ -66,13 +219,41 @@ def DES_Encryption(plaintext, subkeys,  ip = [0], inspect_mode = 0):
         for i in range(len(newciphertextRHS)):
             newciphertextRHS[i] = newciphertextRHS[i] ^ ciphertextLHS[i]
 
-        print(status)
         status = newciphertextLHS + newciphertextRHS
 
+        if inspect_mode:
+            roundOutputs.append(status)
+
+    #Perform a 32 bit swap on the output:
+    status = status[4:8] + status[0:4]
+
+    #The swapped status is the output of the 16th round
+    if inspect_mode:
+        roundOutputs[15] = status
+
+    #Perform the inverse of the initial permutation:
+    status = permutation(status, inv_ip)
+
+    return status, roundOutputs
 
 
+#This function performs DES decryption:
+def DES_Decryption(ciphertext, subkeysIn, ip = [0], inv_ip = [0], inspect_mode = 0, subkeysAlreadyFlipped = True):
+    if not(subkeysAlreadyFlipped):
+        subkeys = copy.deepcopy(subkeysIn)
+        #The subkeys should be swapped for decryption:
+        subKeyTemp = copy.deepcopy(subkeys)
+        subkeys = []
+        for i in range(len(subKeyTemp)-1,-1,-1):
+           subkeys.append(subKeyTemp[i])
+    else:
+        subkeys = subkeysIn
 
-    return status
+
+    #The DES Decryption is identical to DES encryption with the keys swapped
+    return DES_Encryption(ciphertext, subkeys, ip, inv_ip, inspect_mode)
+
+
 
 #Define S-Boxes:
 S = [[[14, 4, 13, 1, 2, 15, 11, 8, 3, 10, 6, 12, 5, 9, 0, 7],
@@ -210,9 +391,6 @@ def keyGeneration(originalKey, permutationInitial, permutationRound):
     return subKeys
 
 
-
-
-
 #This function performs a circular left shift on the input bytearray
 def shiftLeft(bytearr, numshifts):
     output = bytearray(len(bytearr))
@@ -284,6 +462,16 @@ def shiftKeyHalvesLeft(keyInput, numshifts):
 
     return key
 
+#This function translates a character array into a byte array:
+def chartobyte(chararray):
+    output = bytearray(len(chararray))
+
+    for i in range(len(chararray)):
+        if ord(chararray[i]) < 256:
+            output[i] = ord(chararray[i])
+
+    return output
+
 
 
 ##### TESTING CODE ######
@@ -332,10 +520,23 @@ def shiftKeyHalvesLeft(keyInput, numshifts):
 #Toets die key generation:
 
 initKey = bytearray([0x13,0x34,0x57,0x79,0x9B,0xBC,0xDF,0xF1])
+#initKey = "4Wy¼ßñ"
 permuteKey = [57,49,41,33,25,17,9,1,58,50,42,34,26,18,10,2,59,51,43,35,27,19,11,3,60,52,44,36,63,55,47,39,31,23,15,7,62,54,46,38,30,22,14,6,61,53,45,37,29,21,13,5,28,20,12,4]
 permuteRound = [14,17,11,24,1,5,3,28,15,6,21,10,23,19,12,4,26,8,16,7,27,20,13,2,41,52,31,37,47,55,30,40,51,45,33,48,44,49,39,56,34,53,46,42,50,36,29,32]
 
-# print(keyGeneration(initKey,permuteKey,permuteRound))
+IP=[58,50,42,34,26,18,10,2,60,52,44,36,28,20,12,4,62,54,46,38,30,22,14,6,64,56,48,40,32,24,16,8,57,49,41,33,25,17,9,1,59,51,43,35,27,19,11,3,61,53,45,37,29,21,13,5,63,55,47,39,31,23,15,7]
+
+# # Calculate the inverse of the initial permutation:
+# inv_ip = np.zeros(len(IP))
+# for i in range(1,len(IP)+1):
+#     # Find index i in the initial permutation:
+#     inv_ip[i-1] = IP.index(i) + 1
+#
+# print(IP)
+# print(inv_ip)
+
+
+print(keyGeneration(initKey,permuteKey,permuteRound))
 
 # testkey = bytearray([0xF0,0xCC,0xAA,0xF5,0x56,0x67,0x8F])
 # print(shiftKeyHalvesLeft(testkey,1))
@@ -344,12 +545,44 @@ subkeys = keyGeneration(initKey,permuteKey,permuteRound)
 
 IP=[58,50,42,34,26,18,10,2,60,52,44,36,28,20,12,4,62,54,46,38,30,22,14,6,64,56,48,40,32,24,16,8,57,49,41,33,25,17,9,1,59,51,43,35,27,19,11,3,61,53,45,37,29,21,13,5,63,55,47,39,31,23,15,7]
 
+inv_ip = np.zeros(len(IP))
+for i in range(1,len(IP)+1):
+    # Find index i in the initial permutation:
+    inv_ip[i-1] = IP.index(i) + 1
+
+print(IP)
+print(inv_ip)
 
 plaintext = bytearray([0x01,0x23,0x45,0x67,0x89,0xAB,0xCD,0xEF])
 
-DES_Encryption(plaintext,subkeys,IP, 0)
+ciphertext, roundstuff = DES_Encryption(plaintext,subkeys,IP,inv_ip, 0)
+
+plaintextDecrypted, roundstuff = DES_Decryption(ciphertext, subkeys, IP, inv_ip, 0, False)
+
+print(ciphertext)
+print(plaintextDecrypted)
 
 
-RHS = bytearray([0x7A,0x15,0x55,0x7A,0x15,0x55])
-#print(F(RHS,subkeys[0]))
 
+
+
+#
+#
+# RHS = bytearray([0x7A,0x15,0x55,0x7A,0x15,0x55])
+# #print(F(RHS,subkeys[0]))
+#
+# toetsalweer = [bytearray(1)]*5
+# print(toetsalweer)
+#
+# print(list(np.load("Practical 2 File Package/DES_Permutation_Choice2.npy")))
+# print(len(list(np.load("Practical 2 File Package/DES_Permutation_Choice2.npy"))))
+
+
+print("\nHoof encrypt results:")
+
+tdeaCiphertext = TDEA_Encrypt("HelloMan", 0, "abcdefgh", "abcdkfgh", "abxdefgh", IP)
+
+tdeaPlaintextDecrypt = TDEA_Decrypt(0, tdeaCiphertext, "abcdefgh", "abcdkfgh", "abxdefgh", IP)
+
+print(tdeaCiphertext)
+print(tdeaPlaintextDecrypt)
