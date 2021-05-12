@@ -675,7 +675,7 @@ inv_sbox = inv_sbox.reshape(16, 16)
 
 key = "Picture test!"
 
-input = img2array('einstein.png')
+input = img2array('sample.png')
 
 start = time.time()
 enc_img = AES_Encrypt(False, input, None, key, sbox)
@@ -683,14 +683,14 @@ end = time.time()
 
 print("encryption: ",end-start)
 
-array2img(enc_img,"einstein_enc.png")
+array2img(enc_img,"sample_enc.png")
 
 
 start = time.time()
 dec_img = AES_Decrypt(False,enc_img,None,key,inv_sbox)
 end = time.time()
 
-array2img(dec_img,"einstein_dec.png")
+array2img(dec_img,"sample_dec.png")
 
 print("decryption: ",end-start)
 
