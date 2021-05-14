@@ -272,3 +272,9 @@ p_img = np.asarray(p_File)
 imgENC = RC4_Decrypt(p_img, "stefan")
 
 Image.fromarray(imgENC.astype(np.uint8)).save('office_decrypted_rc4.png')
+
+toets = bytearray(5)
+toets2 = bytearray(1)
+toets[2] = 139
+toets2[0] = toets[2]
+print(toets2.hex())
