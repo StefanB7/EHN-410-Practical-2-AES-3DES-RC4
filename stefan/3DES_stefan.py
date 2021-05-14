@@ -6,6 +6,9 @@
 import numpy as np
 import copy
 
+from PIL import Image
+from numpy import asarray
+
 ##### STATIC VARIABLES #####
 
 keyInitialPermutationLocation = "Practical 2 File Package/DES_Permutation_Choice1.npy"
@@ -13,7 +16,7 @@ keyRoundPermutationLocation = "Practical 2 File Package/DES_Permutation_Choice2.
 
 ##### MAIN CIPHER FUNCTIONS #####
 
-def TDEA_Encrypt(plaintext, inspect_mode = 0, key1 = 0, key2 = 0, key3 = 0, ip = [0]):
+def TDEA_Encrypt(plaintext, inspect_mode = 0, key1 = 'abcdefgh', key2 = 'abcdefgh', key3 = 'abcdefgh', ip = [0]):
     print("3DES Encryption")
 
     # Calculate the inverse of the initial permutation:
@@ -32,18 +35,18 @@ def TDEA_Encrypt(plaintext, inspect_mode = 0, key1 = 0, key2 = 0, key3 = 0, ip =
         plaintextEncoded = chartobyte(plaintext)
 
         #Pad the plaintext such that the total number of bytes is an integral multiple of 64 (for DES)
-        plaintextEncoded = pad(plaintextEncoded, 64)
+        plaintextEncoded = pad(plaintextEncoded, 8)
 
         #Divide the encoded plaintext into blocks of 64 bits each, to be encoded:
-        plaintextBlocks = [bytearray(1)]*(len(plaintextEncoded)//64)
-        for i in range(len(plaintextEncoded)//64):
-            plaintextBlocks[i] = plaintextEncoded[i*64:(i+1)*64]
+        plaintextBlocks = [bytearray(1)]*(len(plaintextEncoded)//8)
+        for i in range(len(plaintextEncoded)//8):
+            plaintextBlocks[i] = plaintextEncoded[i*8:(i+1)*8]
 
         #Permutation arrays used for key generation:
         keyInitialPermutation = np.load(keyInitialPermutationLocation)
         keyRoundPermutation = np.load(keyRoundPermutationLocation)
 
-        status = [bytearray(1)]*(len(plaintextEncoded)//64)
+        status = [bytearray(1)]*(len(plaintextEncoded)//8)
 
         # ============================================
         #First triple DES round, encryption with key1:
@@ -94,7 +97,106 @@ def TDEA_Encrypt(plaintext, inspect_mode = 0, key1 = 0, key2 = 0, key3 = 0, ip =
 
         return ciphertextOutput
 
+    # If the plaintext is an image (ndarray) that needs to be encrypted:
+    if (isinstance(plaintext, np.ndarray)):
 
+        plaintextCopy = plaintext.copy()
+
+        # Check the plaintext's dimentions:
+        numRows = plaintext.shape[0]
+        numColumns = plaintext.shape[1]
+        numLayers = plaintext.shape[2]
+
+        # Test if there is an AlphaLayer:
+        bAlphaLayer = False
+        if (numLayers > 3):
+            bAlphaLayer = True
+            numLayers = 3
+            alpha_layer = np.array(plaintext[:, :, 3])
+
+        # Ciphertext variable:
+        cipherText = np.zeros((numRows, numColumns, numLayers), dtype='u1')
+
+        for layer in range(numLayers):
+
+            #Create a 1D bytearray of the 2D image:
+            inputbytearray = [None]*(numRows*numColumns//8)
+            for i in range((numRows*numColumns//8)):
+                inputbytearray[i] = bytearray(8)
+
+            index = 0
+            indexIntoBytearray = 0
+            maxElements = (numRows*numColumns//8)
+            for row in range(numRows):
+                for column in range(numColumns):
+                    if (index < maxElements):
+                        inputbytearray[index][indexIntoBytearray] = plaintextCopy[row][column][layer]
+                        indexIntoBytearray += 1
+                        if (indexIntoBytearray >= 8):
+                            index += 1
+                            indexIntoBytearray = 0
+
+            # Permutation arrays used for key generation:
+            keyInitialPermutation = np.load(keyInitialPermutationLocation)
+            keyRoundPermutation = np.load(keyRoundPermutationLocation)
+
+            status = [None] * (numRows * numColumns // 8)
+            for i in range((numRows * numColumns // 8)):
+                status[i] = bytearray(8)
+
+            # ============================================
+            # First triple DES round, encryption with key1:
+
+            # Generate the subkeys:
+            key1bytes = chartobyte(key1)
+            subkeys = keyGeneration(key1bytes, keyInitialPermutation, keyRoundPermutation)
+
+            # Perform first DES encryption on all blocks of 64 bits:
+            for index in range(len(inputbytearray)):
+                status[index], roundOutputEncryption1 = DES_Encryption(inputbytearray[index], subkeys, ip, inv_ip, inspect_mode)
+
+
+            # Second triple DES round, decryption with key2:
+
+            # Generate the subkeys:
+            key2bytes = chartobyte(key2)
+            subkeys = keyGeneration(key2bytes, keyInitialPermutation, keyRoundPermutation)
+
+            # The subkeys should be swapped for decryption:
+            subKeyTemp = copy.deepcopy(subkeys)
+            subkeys = []
+            for i in range(len(subKeyTemp) - 1, -1, -1):
+                subkeys.append(subKeyTemp[i])
+
+            for index in range(len(status)):
+                status[index], roundOutputDecryption = DES_Decryption(status[index], subkeys, ip, inv_ip, inspect_mode)
+
+            #Third and final triple DES round, encryption with key3:
+
+            #Generate the subkeys:
+            key3bytes = chartobyte(key3)
+            subkeys = keyGeneration(key3bytes, keyInitialPermutation, keyRoundPermutation)
+
+            #Perform final DES encryption on all blocks of 64 bits:
+            for index in range(len(status)):
+                status[index], roundOutputEncryption2 = DES_Encryption(status[index], subkeys, ip, inv_ip, inspect_mode)
+
+            index = 0
+            indexIntoBytearray = 0
+            maxElements = (numRows*numColumns//8)
+            for row in range(numRows):
+                for column in range(numColumns):
+                    if (index < maxElements):
+                        cipherText[row][column][layer] = status[index][indexIntoBytearray]
+                        indexIntoBytearray += 1
+                        if (indexIntoBytearray >= 8):
+                            index += 1
+                            indexIntoBytearray = 0
+
+        if bAlphaLayer:
+            cipherText = np.dstack((cipherText, alpha_layer))
+
+        return cipherText.astype(int)
 
 
 def TDEA_Decrypt(inspect_mode, ciphertext, key1, key2, key3, ip):
@@ -116,18 +218,18 @@ def TDEA_Decrypt(inspect_mode, ciphertext, key1, key2, key3, ip):
         ciphertextEncoded = chartobyte(ciphertext)
 
         #Pad the ciphertext such that the total number of bytes is an integral multiple of 64 (for DES)
-        ciphertextEncoded = pad(ciphertextEncoded, 64)
+        ciphertextEncoded = pad(ciphertextEncoded, 8)
 
         #Divide the encoded ciphertext into blocks of 64 bits each, to be encoded:
-        ciphertextBlocks = [bytearray(1)]*(len(ciphertextEncoded)//64)
-        for i in range(len(ciphertextEncoded)//64):
-            ciphertextBlocks[i] = ciphertextEncoded[i*64:(i+1)*64]
+        ciphertextBlocks = [bytearray(1)]*(len(ciphertextEncoded)//8)
+        for i in range(len(ciphertextEncoded)//8):
+            ciphertextBlocks[i] = ciphertextEncoded[i*8:(i+1)*8]
 
         #Permutation arrays used for key generation:
         keyInitialPermutation = np.load(keyInitialPermutationLocation)
         keyRoundPermutation = np.load(keyRoundPermutationLocation)
 
-        status = [bytearray(1)]*(len(ciphertextEncoded)//64)
+        status = [bytearray(1)]*(len(ciphertextEncoded)//8)
 
         # ============================================
         #First triple DES round, decryption with key1:
@@ -183,14 +285,125 @@ def TDEA_Decrypt(inspect_mode, ciphertext, key1, key2, key3, ip):
 
         return plaintextOutput
 
+    # If the ciphertext is an image (ndarray) that needs to be encrypted:
+    if (isinstance(ciphertext, np.ndarray)):
+
+        ciphertextCopy = ciphertext.copy()
+
+        # Check the plaintext's dimentions:
+        numRows = ciphertext.shape[0]
+        numColumns = ciphertext.shape[1]
+        numLayers = ciphertext.shape[2]
+
+        # Test if there is an AlphaLayer:
+        bAlphaLayer = False
+        if (numLayers > 3):
+            bAlphaLayer = True
+            numLayers = 3
+            alpha_layer = np.array(ciphertext[:, :, 3])
+
+        # Ciphertext variable:
+        plaintext = np.zeros((numRows, numColumns, numLayers), dtype='u1')
+
+        for layer in range(numLayers):
+
+            # Create a 1D bytearray of the 2D image:
+            inputbytearray = [None] * (numRows * numColumns // 8)
+            for i in range((numRows * numColumns // 8)):
+                inputbytearray[i] = bytearray(8)
+
+            index = 0
+            indexIntoBytearray = 0
+            maxElements = (numRows * numColumns // 8)
+            for row in range(numRows):
+                for column in range(numColumns):
+                    if (index < maxElements):
+                        inputbytearray[index][indexIntoBytearray] = ciphertextCopy[row][column][layer]
+                        indexIntoBytearray += 1
+                        if (indexIntoBytearray >= 8):
+                            index += 1
+                            indexIntoBytearray = 0
+
+            # Permutation arrays used for key generation:
+            keyInitialPermutation = np.load(keyInitialPermutationLocation)
+            keyRoundPermutation = np.load(keyRoundPermutationLocation)
+
+            status = [None] * (numRows * numColumns // 8)
+            for i in range((numRows * numColumns // 8)):
+                status[i] = bytearray(8)
+
+            # ============================================
+            # First triple DES round, decryption with key1:
+
+            # Generate the subkeys:
+            key3bytes = chartobyte(key3)
+            subkeys = keyGeneration(key3bytes, keyInitialPermutation, keyRoundPermutation)
+
+            # The subkeys should be swapped for decryption:
+            subKeyTemp = copy.deepcopy(subkeys)
+            subkeys = []
+            for i in range(len(subKeyTemp) - 1, -1, -1):
+                subkeys.append(subKeyTemp[i])
+
+            # Perform first DES encryption on all blocks of 64 bits:
+            for index in range(len(inputbytearray)):
+                status[index], roundOutputDecryption1 = DES_Decryption(inputbytearray[index], subkeys, ip, inv_ip, inspect_mode)
+
+            # Second triple DES round, encryption with key2:
+
+            # Generate the subkeys:
+            key2bytes = chartobyte(key2)
+            subkeys = keyGeneration(key2bytes, keyInitialPermutation, keyRoundPermutation)
+
+            for index in range(len(status)):
+                status[index], roundOutputEncryption = DES_Encryption(status[index], subkeys, ip, inv_ip, inspect_mode)
+
+            # Third and final triple DES round, encryption with key3:
+
+            # Generate the subkeys:
+            key1bytes = chartobyte(key1)
+            subkeys = keyGeneration(key1bytes, keyInitialPermutation, keyRoundPermutation)
+
+            # The subkeys should be swapped for decryption:
+            subKeyTemp = copy.deepcopy(subkeys)
+            subkeys = []
+            for i in range(len(subKeyTemp) - 1, -1, -1):
+                subkeys.append(subKeyTemp[i])
+
+            # Perform final DES encryption on all blocks of 64 bits:
+            for index in range(len(status)):
+                status[index], roundOutputDecryption2 = DES_Encryption(status[index], subkeys, ip, inv_ip, inspect_mode)
+
+            index = 0
+            indexIntoBytearray = 0
+            maxElements = (numRows * numColumns // 8)
+            for row in range(numRows):
+                for column in range(numColumns):
+                    if (index < maxElements):
+                        plaintext[row][column][layer] = status[index][indexIntoBytearray]
+                        indexIntoBytearray += 1
+                        if (indexIntoBytearray >= 8):
+                            index += 1
+                            indexIntoBytearray = 0
+
+        if bAlphaLayer:
+            cipherText = np.dstack((plaintext, alpha_layer))
+
+        return plaintext.astype(int)
+
 
 ###### HELPER FUNCTIONS #####
 
 #Function pads the input bytearray, so that its length will divide the integral_number provided
 #Pads the bytearray so that the last group of integral_number is full
 #Default padding = 0x00
-def pad(bytearr, integral_number = 64, padding = 0x00):
+def pad(bytearr, integral_number = 8, padding = 0x00):
     bytearrayOutput = copy.deepcopy(bytearr)
+
+    #If no padding is needed, return:
+    if len(bytearrayOutput) % integral_number == 0:
+        return bytearrayOutput
+
     numShort = integral_number - (len(bytearr) % integral_number)
     for i in range(numShort):
         bytearrayOutput.append(padding)
@@ -580,9 +793,25 @@ print(plaintextDecrypted)
 
 print("\nHoof encrypt results:")
 
-tdeaCiphertext = TDEA_Encrypt("HelloMan", 0, "abcdefgh", "abcdkfgh", "abxdefgh", IP)
+tdeaCiphertext = TDEA_Encrypt("HelloMan123345Hoe gaan dit?", 0, "abcdefgh", "abcdkfgh", "abxdefgh", IP)
 
 tdeaPlaintextDecrypt = TDEA_Decrypt(0, tdeaCiphertext, "abcdefgh", "abcdkfgh", "abxdefgh", IP)
 
 print(tdeaCiphertext)
 print(tdeaPlaintextDecrypt)
+
+
+#Test Image:
+p_File = Image.open('office.png')
+p_img = np.asarray(p_File)
+imgENC = TDEA_Encrypt(p_img, 0, "abcdefgh", "abcdkfgh", "abxdefgh", IP)
+
+Image.fromarray(imgENC.astype(np.uint8)).save('office_encrypted.png')
+
+print("Image Encryption Done")
+
+p_File = Image.open('office_encrypted.png')
+p_img = np.asarray(p_File)
+imgENC = TDEA_Decrypt(0, p_img, "abcdefgh", "abcdkfgh", "abxdefgh", IP)
+
+Image.fromarray(imgENC.astype(np.uint8)).save('office_decrypted.png')
