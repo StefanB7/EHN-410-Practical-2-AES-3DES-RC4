@@ -2,8 +2,12 @@
 # AES-256 (32 byte key) encryption and decryption (128 bit block size)
 # Group 7
 
+
+# TODO: CBC AES encryption kan nie geparellize word nie omdat hulle van mekaar afhang, maar die decrytion kan wel 
+
 import numpy as np
 from PIL import Image
+import multiprocessing as mp
 import time
 
 ############################ Main functions: ############################
@@ -126,22 +130,22 @@ def AES_Encrypt(inspect_mode, plaintext, arg_iv, key, sbox_array):
                 else:
                     encrypted_bytes2 = np.concatenate((encrypted_bytes2, np.array(bytes_block.reshape(1, -1)[0])), axis=None)
 
-        # Pixels that did not fit within the cipher block size
-        # XOR with first encrypted block
-        if imgFlag:
+    # Pixels that did not fit within the cipher block size
+    # XOR with first encrypted block
+    if imgFlag:
 
-            r_left = np.array(P[:,:,0]).reshape(1,P[:,:,0].shape[0]*P[:,:,0].shape[1])[0]            
-            g_left = np.array(P[:,:,1]).reshape(1,P[:,:,1].shape[0]*P[:,:,1].shape[1])[0]
-            b_left = np.array(P[:,:,2]).reshape(1,P[:,:,2].shape[0]*P[:,:,2].shape[1])[0]
+        r_left = np.array(P[:,:,0]).reshape(1,P[:,:,0].shape[0]*P[:,:,0].shape[1])[0]            
+        g_left = np.array(P[:,:,1]).reshape(1,P[:,:,1].shape[0]*P[:,:,1].shape[1])[0]
+        b_left = np.array(P[:,:,2]).reshape(1,P[:,:,2].shape[0]*P[:,:,2].shape[1])[0]
 
-            r_left = r_left[len(r_left)-imgFlagNumber:]
-            g_left = g_left[len(g_left)-imgFlagNumber:]
-            b_left = b_left[len(b_left)-imgFlagNumber:]
-           
-            encrypted_bytes0 = np.concatenate((encrypted_bytes0, XOR(encrypted_bytes0[:imgFlagNumber],r_left)), axis=None)
-            encrypted_bytes1 = np.concatenate((encrypted_bytes1, XOR(encrypted_bytes1[:imgFlagNumber],g_left)), axis=None)
-            encrypted_bytes2 = np.concatenate((encrypted_bytes2, XOR(encrypted_bytes2[:imgFlagNumber],b_left)), axis=None)
-            
+        r_left = r_left[len(r_left)-imgFlagNumber:]
+        g_left = g_left[len(g_left)-imgFlagNumber:]
+        b_left = b_left[len(b_left)-imgFlagNumber:]
+        
+        encrypted_bytes0 = np.concatenate((encrypted_bytes0, XOR(encrypted_bytes0[:imgFlagNumber],r_left)), axis=None)
+        encrypted_bytes1 = np.concatenate((encrypted_bytes1, XOR(encrypted_bytes1[:imgFlagNumber],g_left)), axis=None)
+        encrypted_bytes2 = np.concatenate((encrypted_bytes2, XOR(encrypted_bytes2[:imgFlagNumber],b_left)), axis=None)
+        
 
     if encrypted_bytes2 is None:
         return encrypted_bytes0 # text of np array ????????????? TODO:
@@ -280,21 +284,21 @@ def AES_Decrypt(inspect_mode, ciphertext, iv, key, inv_sbox_array):
                     decrypted_bytes2 = np.concatenate((decrypted_bytes2, np.array(bytes_block.reshape(1, -1)[0])), axis=None)
 
 
-        # Pixels that did not fit within the cipher block size
-        # XOR with first encrypted block
-        if imgFlag:
-            r_left = np.array(C[:,:,0]).reshape(1,C[:,:,0].shape[0]*C[:,:,0].shape[1])[0]            
-            g_left = np.array(C[:,:,1]).reshape(1,C[:,:,1].shape[0]*C[:,:,1].shape[1])[0]
-            b_left = np.array(C[:,:,2]).reshape(1,C[:,:,2].shape[0]*C[:,:,2].shape[1])[0]
+    # Pixels that did not fit within the cipher block size
+    # XOR with first encrypted block
+    if imgFlag:
+        r_left = np.array(C[:,:,0]).reshape(1,C[:,:,0].shape[0]*C[:,:,0].shape[1])[0]            
+        g_left = np.array(C[:,:,1]).reshape(1,C[:,:,1].shape[0]*C[:,:,1].shape[1])[0]
+        b_left = np.array(C[:,:,2]).reshape(1,C[:,:,2].shape[0]*C[:,:,2].shape[1])[0]
 
-            r_left = r_left[len(r_left)-imgFlagNumber:]
-            g_left = g_left[len(g_left)-imgFlagNumber:]
-            b_left = b_left[len(b_left)-imgFlagNumber:]
-           
-            decrypted_bytes0 = np.concatenate((decrypted_bytes0, XOR(firstCipherBlock[0],r_left)), axis=None)
-            decrypted_bytes1 = np.concatenate((decrypted_bytes1, XOR(firstCipherBlock[1],g_left)), axis=None)
-            decrypted_bytes2 = np.concatenate((decrypted_bytes2, XOR(firstCipherBlock[2],b_left)), axis=None)
-            
+        r_left = r_left[len(r_left)-imgFlagNumber:]
+        g_left = g_left[len(g_left)-imgFlagNumber:]
+        b_left = b_left[len(b_left)-imgFlagNumber:]
+        
+        decrypted_bytes0 = np.concatenate((decrypted_bytes0, XOR(firstCipherBlock[0],r_left)), axis=None)
+        decrypted_bytes1 = np.concatenate((decrypted_bytes1, XOR(firstCipherBlock[1],g_left)), axis=None)
+        decrypted_bytes2 = np.concatenate((decrypted_bytes2, XOR(firstCipherBlock[2],b_left)), axis=None)
+        
 
 
     if decrypted_bytes2 is None:
@@ -316,6 +320,175 @@ def AES_Decrypt(inspect_mode, ciphertext, iv, key, inv_sbox_array):
     # TODO: wat is the output van die AES encryption en wat is die ciphertext input vir die AES decryption
     # en hoe gaan mens die verskil sien tussen dit en n image?
 
+
+# Multiprocessing
+
+# each channel is done in a different process
+def AES_Encrypt_MP(inspect_mode, plaintext, arg_iv, key, sbox_array):
+
+
+    encrypted_bytes0 = None
+    encrypted_bytes1 = None
+    encrypted_bytes2 = None
+
+    # how many blocks to encrypt
+    iblocks = 0
+
+    # flag indicating not all blocks were encrypted
+    imgFlag = False
+
+    # number of data bytes not encrypted
+    imgFlagNumber = 0
+
+    # Prepare byte matrix for plaintext encryption
+    if type(plaintext) is not np.ndarray:
+
+        # First dimension is for plain text or Red channel, second for Green channel and third for Blue channel
+        plain_bytes = [getBitsandPad(plaintext)]
+
+        # how many blocks there is to encrypt
+        iblocks = plain_bytes[0].shape[0] // 4 
+
+    # # Prepare byte matrix for image encryption
+    else:
+        
+        # exctract RGB
+        P = plaintext
+        
+        r_channel = np.array(P[:,:,0]).reshape(1,P[:,:,0].shape[0]*P[:,:,0].shape[1])[0]
+        g_channel = np.array(P[:,:,1]).reshape(1,P[:,:,1].shape[0]*P[:,:,1].shape[1])[0]
+        b_channel = np.array(P[:,:,2]).reshape(1,P[:,:,2].shape[0]*P[:,:,2].shape[1])[0]
+
+        iblocks = len(r_channel) // 16
+
+        # check if not all blocks will be encrypted
+        if len(r_channel) != 16 * (len(r_channel) // 16):
+            imgFlag = True
+            imgFlagNumber = len(r_channel) - (16 * (len(r_channel) // 16))
+        
+        plain_bytes = [getBitsandPad(r_channel, False, True),getBitsandPad(g_channel, False, True),getBitsandPad(b_channel, False, True)]
+
+
+    param0 = (key,sbox_array,arg_iv,iblocks,plain_bytes[0])
+    param1 = (key,sbox_array,arg_iv,iblocks,plain_bytes[1])
+    param2 = (key,sbox_array,arg_iv,iblocks,plain_bytes[2])
+
+    mylist = [param0,param1,param2]
+
+
+    p = mp.Pool(4)
+
+    result = p.starmap_async(AES_Loop_MP, mylist)
+    p.close()
+    p.join()
+
+    encrypted_bytes0 = np.array(result.get()[0])
+    encrypted_bytes1 = np.array(result.get()[1])
+    encrypted_bytes2 = np.array(result.get()[2])
+
+
+    # Pixels that did not fit within the cipher block size
+    # XOR with first encrypted block
+    if imgFlag:
+
+        r_left = np.array(P[:,:,0]).reshape(1,P[:,:,0].shape[0]*P[:,:,0].shape[1])[0]            
+        g_left = np.array(P[:,:,1]).reshape(1,P[:,:,1].shape[0]*P[:,:,1].shape[1])[0]
+        b_left = np.array(P[:,:,2]).reshape(1,P[:,:,2].shape[0]*P[:,:,2].shape[1])[0]
+
+        r_left = r_left[len(r_left)-imgFlagNumber:]
+        g_left = g_left[len(g_left)-imgFlagNumber:]
+        b_left = b_left[len(b_left)-imgFlagNumber:]
+        
+        encrypted_bytes0 = np.concatenate((encrypted_bytes0, XOR(encrypted_bytes0[:imgFlagNumber],r_left)), axis=None)
+        encrypted_bytes1 = np.concatenate((encrypted_bytes1, XOR(encrypted_bytes1[:imgFlagNumber],g_left)), axis=None)
+        encrypted_bytes2 = np.concatenate((encrypted_bytes2, XOR(encrypted_bytes2[:imgFlagNumber],b_left)), axis=None)
+        
+
+    if encrypted_bytes2 is None:
+        return encrypted_bytes0 # text of np array ????????????? TODO:
+    else:
+        
+        encrypted_bytes0 = encrypted_bytes0.reshape(P[:,:,0].shape[0],P[:,:,0].shape[1])
+        encrypted_bytes1 = encrypted_bytes1.reshape(P[:,:,1].shape[0],P[:,:,1].shape[1])
+        encrypted_bytes2 = encrypted_bytes2.reshape(P[:,:,2].shape[0],P[:,:,2].shape[1])
+
+
+        if plaintext.shape[2] == 4:
+            alpha_layer = np.array(plaintext[:,:,3])
+            return np.dstack((encrypted_bytes0.astype(int),encrypted_bytes1.astype(int),encrypted_bytes2.astype(int),alpha_layer.astype(int)))
+        else:
+            return np.dstack((encrypted_bytes0.astype(int),encrypted_bytes1.astype(int),encrypted_bytes2.astype(int)))
+
+
+
+def AES_Loop_MP(key,sbox_array,arg_iv,iblocks,plain_bytes):
+
+    encrypted_bytes = None
+
+    bytes_key = getBitsandPad(key, True)
+
+    # key expansion
+    bytes_key = keyExpansion(bytes_key, sbox_array)
+
+    # Format the initialization vector
+    iv = formatIV(arg_iv, bytes_key)
+
+    prev_block = iv
+    for blocks in range(iblocks):
+        
+        bytes_block = plain_bytes[:4, :]
+        plain_bytes = np.array(plain_bytes[4:, :])
+
+
+        # CBC step:
+        # XOR input block with previous block, (IV for first block)
+        bytes_block = XOR(bytes_block, prev_block)
+
+        # Round 0:
+        # Key selection from expansion
+        k0 = bytes_key[:, 0:4]
+        # Add round key
+        bytes_block = AddRoundKey(k0, bytes_block)
+
+        # Round 1 to 13:
+        for round in range(13):
+            # Key selection from expansion
+            kn = bytes_key[:, 4*round+4:4*round+8]
+            # SubBytes
+            bytes_block = SubBytes(bytes_block, sbox_array)
+            # ShiftRows
+            bytes_block = ShiftRows(bytes_block)
+            # MixColumns
+            bytes_block = MixColumns(bytes_block)
+            # AddRoundKey
+            bytes_block = AddRoundKey(kn, bytes_block)
+
+        # Round 14 (final):
+        # Key selection form expansion
+        k14 = bytes_key[:, 56:60]
+        # SubBytes
+        bytes_block = SubBytes(bytes_block, sbox_array)
+        # ShiftRows
+        bytes_block = ShiftRows(bytes_block)
+        # AddRoundKey
+        bytes_block = AddRoundKey(k14, bytes_block)
+
+        # Save previous encrypted block for CBC (Cipher block chaining)
+        prev_block = bytes_block
+
+    
+        # save the encrypted block
+                
+        if encrypted_bytes is None:
+            encrypted_bytes = np.array(bytes_block.reshape(1, -1)[0])
+        else:
+            encrypted_bytes = np.concatenate((encrypted_bytes, np.array(bytes_block.reshape(1, -1)[0])), axis=None)
+
+    return encrypted_bytes
+
+# each channel and each round is done in a different process
+def AES_Decrypt_MP(inspect_mode, ciphertext, iv, key, inv_sbox_array):
+    return [inspect_mode/10,ciphertext/10,iv/10,key/10,inv_sbox_array/10]
 
 ############################ Helper functions: ###########################
 
@@ -622,18 +795,45 @@ def array2img(arr, loc):
     print("\n\nImage saved to path : "+"jacobus\images\\"+loc+"\n\n")
 
 
-sbox = np.load('jacobus\lookup_files\AES_Sbox_lookup.npy')
-
-sbox = sbox.reshape(1, -1)[0]
-sbox = np.array([int(str(value), 16) for value in sbox], dtype=np.ubyte)
-sbox = sbox.reshape(16, 16)
 
 
-inv_sbox = np.load('jacobus\lookup_files\AES_Inverse_Sbox_lookup.npy')
-inv_sbox = inv_sbox.reshape(1, -1)[0]
-inv_sbox = np.array([int(str(value), 16)
-                    for value in inv_sbox], dtype=np.ubyte)
-inv_sbox = inv_sbox.reshape(16, 16)
+
+if __name__ == "__main__":
+
+
+    sbox = np.load('jacobus\lookup_files\AES_Sbox_lookup.npy')
+
+    sbox = sbox.reshape(1, -1)[0]
+    sbox = np.array([int(str(value), 16) for value in sbox], dtype=np.ubyte)
+    sbox = sbox.reshape(16, 16)
+
+
+    inv_sbox = np.load('jacobus\lookup_files\AES_Inverse_Sbox_lookup.npy')
+    inv_sbox = inv_sbox.reshape(1, -1)[0]
+    inv_sbox = np.array([int(str(value), 16)
+                        for value in inv_sbox], dtype=np.ubyte)
+    inv_sbox = inv_sbox.reshape(16, 16)
+
+    key = "Picture test!"
+
+    input = img2array('einstein.png')
+
+    start = time.time()
+    enc_img = AES_Encrypt_MP(False, input, None, key, sbox)
+    end = time.time()
+
+    print("encryption: ",end-start)
+
+    array2img(enc_img,"einstein_enc.png")
+
+
+    start = time.time()
+    dec_img = AES_Decrypt(False,enc_img,None,key,inv_sbox)
+    end = time.time()
+
+    array2img(dec_img,"einstein_dec.png")
+
+    print("decryption: ",end-start)
 
 
 # iv = np.array([[1, 2, 3, 4], [1, 2, 3, 4], [1, 2, 3, 4], [1, 2, 3, 4]])
@@ -673,26 +873,26 @@ inv_sbox = inv_sbox.reshape(16, 16)
 # print(str)
 
 
-key = "Picture test!"
+# key = "Picture test!"
 
-input = img2array('sample.png')
+# input = img2array('einstein.png')
 
-start = time.time()
-enc_img = AES_Encrypt(False, input, None, key, sbox)
-end = time.time()
+# start = time.time()
+# enc_img = AES_Encrypt(False, input, None, key, sbox)
+# end = time.time()
 
-print("encryption: ",end-start)
+# print("encryption: ",end-start)
 
-array2img(enc_img,"sample_enc.png")
+# array2img(enc_img,"einstein_enc.png")
 
 
-start = time.time()
-dec_img = AES_Decrypt(False,enc_img,None,key,inv_sbox)
-end = time.time()
+# start = time.time()
+# dec_img = AES_Decrypt(False,enc_img,None,key,inv_sbox)
+# end = time.time()
 
-array2img(dec_img,"sample_dec.png")
+# array2img(dec_img,"einstein_dec.png")
 
-print("decryption: ",end-start)
+# print("decryption: ",end-start)
 
 
 
