@@ -8,6 +8,8 @@
 import numpy as np
 from PIL import Image
 import multiprocessing as mp
+import multiprocessing
+import multiprocessing.pool
 import time
 
 ############################ Main functions: ############################
@@ -323,6 +325,26 @@ def AES_Decrypt(inspect_mode, ciphertext, iv, key, inv_sbox_array):
 
 # Multiprocessing
 
+class NoDaemonProcess(multiprocessing.Process):
+    @property
+    def daemon(self):
+        return False
+
+    @daemon.setter
+    def daemon(self, value):
+        pass
+
+
+class NoDaemonContext(type(multiprocessing.get_context())):
+    Process = NoDaemonProcess
+
+# We sub-class multiprocessing.pool.Pool instead of multiprocessing.Pool
+# because the latter is only a wrapper function, not a proper class.
+class NestablePool(multiprocessing.pool.Pool):
+    def __init__(self, *args, **kwargs):
+        kwargs['context'] = NoDaemonContext()
+        super(NestablePool, self).__init__(*args, **kwargs)
+
 # each channel is done in a different process
 def AES_Encrypt_MP(inspect_mode, plaintext, arg_iv, key, sbox_array):
 
@@ -539,7 +561,7 @@ def AES_Decrypt_MP(inspect_mode, ciphertext, iv, key, inv_sbox_array):
 
     mylist = [param0,param1,param2]
 
-    p = mp.Pool(4)
+    p = NestablePool(4)
 
     result = p.starmap_async(AES_Loop_MP_DEC, mylist)
     p.close()
@@ -596,52 +618,89 @@ def AES_Loop_MP_DEC(key,inv_sbox_array,iv,iblocks,cipher_bytes):
 
     prev_block = [iv]
 
+    listBlocks = []
+
+
     for blocks in range(iblocks):
 
         bytes_block = cipher_bytes[:4, :]
+        prev_block.append(bytes_block)
+        
+        l_b = (bytes_block,bytes_key,inv_sbox_array,prev_block.pop(0))
+    
+        listBlocks.append(l_b)
+
         cipher_bytes = np.array(cipher_bytes[4:, :])
 
-        prev_block.append(bytes_block)
+    p = mp.Pool(4)    
+    result = p.starmap_async(AES_Decrypt_blocks, listBlocks)
+    p.close()
+    p.join()
 
-        # Round 0:
+    rr = result.get()
+
+    decrypted_bytes = np.array(rr[0].reshape(1, -1))
+
+    for i in range(1,len(rr)):
+        decrypted_bytes = np.concatenate((decrypted_bytes,np.array(rr[i].reshape(1, -1))), axis=None)
+
+
+        # param0 = (key,inv_sbox_array,iv,iblocks,cipher_bytes[0])
+        # param1 = (key,inv_sbox_array,iv,iblocks,cipher_bytes[1])
+        # param2 = (key,inv_sbox_array,iv,iblocks,cipher_bytes[2])
+
+        # mylist = [param0,param1,param2]
+
+        # p = mp.Pool(4)
+
+        # result = p.starmap_async(AES_Loop_MP_DEC, mylist)
+        # p.close()
+        # p.join()
+
+
+        # # save the encrypted block              
+        # if decrypted_bytes is None:
+        #     decrypted_bytes = np.array(bytes_block.reshape(1, -1)[0])
+        # else:
+        #     decrypted_bytes = np.concatenate((decrypted_bytes, np.array(bytes_block.reshape(1, -1)[0])), axis=None)
+
+    return decrypted_bytes
+
+
+def AES_Decrypt_blocks(bytes_block,bytes_key,inv_sbox_array,xorBlock):
+    # Round 0:
+    # Key selection from expansion
+    k0 = bytes_key[:, 56:60]
+    # Add round key
+    bytes_block = AddRoundKey(k0, bytes_block)
+
+    # Round 1 to 13:
+    for round in range(13):
         # Key selection from expansion
-        k0 = bytes_key[:, 56:60]
-        # Add round key
-        bytes_block = AddRoundKey(k0, bytes_block)
-
-        # Round 1 to 13:
-        for round in range(13):
-            # Key selection from expansion
-            kn = bytes_key[:, 4*(12-round)+4:4*(12-round)+8]
-            # Inverse ShiftRows
-            bytes_block = inv_ShiftRows(bytes_block)
-            # Inverse SubBytes
-            bytes_block = inv_SubBytes(bytes_block, inv_sbox_array)
-            # AddRoundKey
-            bytes_block = AddRoundKey(kn, bytes_block)
-            # Inverse MixColumns
-            bytes_block = inv_MixColumns(bytes_block)
-
-        # Round 14:
-        # Key selection from expansion
-        k14 = bytes_key[:, 0:4]
+        kn = bytes_key[:, 4*(12-round)+4:4*(12-round)+8]
         # Inverse ShiftRows
         bytes_block = inv_ShiftRows(bytes_block)
         # Inverse SubBytes
         bytes_block = inv_SubBytes(bytes_block, inv_sbox_array)
         # AddRoundKey
-        bytes_block = AddRoundKey(k14, bytes_block)
+        bytes_block = AddRoundKey(kn, bytes_block)
+        # Inverse MixColumns
+        bytes_block = inv_MixColumns(bytes_block)
 
-        # CBC step:
-        bytes_block = XOR(bytes_block, prev_block.pop(0))
-        
-        # save the encrypted block              
-        if decrypted_bytes is None:
-            decrypted_bytes = np.array(bytes_block.reshape(1, -1)[0])
-        else:
-            decrypted_bytes = np.concatenate((decrypted_bytes, np.array(bytes_block.reshape(1, -1)[0])), axis=None)
+    # Round 14:
+    # Key selection from expansion
+    k14 = bytes_key[:, 0:4]
+    # Inverse ShiftRows
+    bytes_block = inv_ShiftRows(bytes_block)
+    # Inverse SubBytes
+    bytes_block = inv_SubBytes(bytes_block, inv_sbox_array)
+    # AddRoundKey
+    bytes_block = AddRoundKey(k14, bytes_block)
 
-    return decrypted_bytes
+    # CBC step:
+    bytes_block = XOR(bytes_block, xorBlock)
+
+    return bytes_block
 
 ############################ Helper functions: ###########################
 
@@ -969,7 +1028,7 @@ if __name__ == "__main__":
 
     key = "Picture test!"
 
-    input = img2array('einstein.png')
+    input = img2array('office.png')
 
     start = time.time()
     enc_img = AES_Encrypt_MP(False, input, None, key, sbox)
@@ -977,14 +1036,14 @@ if __name__ == "__main__":
 
     print("encryption: ",end-start)
 
-    array2img(enc_img,"einstein_enc.png")
+    array2img(enc_img,"office_enc.png")
 
 
     start = time.time()
     dec_img = AES_Decrypt_MP(False,enc_img,None,key,inv_sbox)
     end = time.time()
 
-    array2img(dec_img,"einstein_dec.png")
+    array2img(dec_img,"office_dec.png")
 
     print("decryption: ",end-start)
 
