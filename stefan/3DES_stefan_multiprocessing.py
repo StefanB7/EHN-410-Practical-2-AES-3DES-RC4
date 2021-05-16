@@ -61,7 +61,7 @@ def TDEA_Encrypt(plaintext, inspect_mode = 0, key1 = 'abcdefgh', key2 = 'abcdefg
 
         #Perform first DES encryption on all blocks of 64 bits:
         for index in range(len(plaintextBlocks)):
-            status[index] = DES_Encryption(plaintextBlocks[index], subkeys, ip, inv_ip, inspect_mode)
+            status[index], roundEncryption1arr = DES_Encryption(plaintextBlocks[index], subkeys, ip, inv_ip, inspect_mode)
 
 
 
@@ -78,7 +78,7 @@ def TDEA_Encrypt(plaintext, inspect_mode = 0, key1 = 'abcdefgh', key2 = 'abcdefg
            subkeys.append(subKeyTemp[i])
 
         for index in range(len(status)):
-            status[index] = DES_Decryption(status[index], subkeys, ip, inv_ip, inspect_mode)
+            status[index], roundDecryption1arr = DES_Decryption(status[index], subkeys, ip, inv_ip, inspect_mode)
 
 
         #Third and final triple DES round, encryption with key3:
@@ -89,7 +89,7 @@ def TDEA_Encrypt(plaintext, inspect_mode = 0, key1 = 'abcdefgh', key2 = 'abcdefg
 
         #Perform final DES encryption on all blocks of 64 bits:
         for index in range(len(status)):
-            status[index] = DES_Encryption(status[index], subkeys, ip, inv_ip, inspect_mode)
+            status[index], roundEncryption2arr = DES_Encryption(status[index], subkeys, ip, inv_ip, inspect_mode)
 
         print(status)
 
@@ -99,7 +99,19 @@ def TDEA_Encrypt(plaintext, inspect_mode = 0, key1 = 'abcdefgh', key2 = 'abcdefg
             for charIndex in range(8):
                 ciphertextOutput = ciphertextOutput + chr(status[blockIndex][charIndex])
 
-        return ciphertextOutput
+        if not(inspect_mode):
+            return ciphertextOutput
+        else:
+            #Create the hex array inspect mode output:
+            roundEncryption1arr = np.array(toHexString(roundDecryption1arr))
+            roundDecryption1arr = np.array(toHexString(roundDecryption1arr))
+            roundEncryption2arr = np.array(toHexString(roundEncryption2arr))
+
+            return {"DES1_Outputs": roundEncryption1arr, "DES2_Outputs": roundDecryption1arr, "DES3_Outputs": roundEncryption2arr, "Ciphertext": ciphertextOutput}
+
+
+
+
 
     # If the plaintext is an image (ndarray) that needs to be encrypted:
     if (isinstance(plaintext, np.ndarray)):
@@ -468,14 +480,15 @@ def DES_Encryption(plaintext, subkeys,  ip = [0], inv_ip = [0], inspect_mode = 0
     #Perform a 32 bit swap on the output:
     status = status[4:8] + status[0:4]
 
+    #TODO: Find out if we should return the swapped or not swapped of the last Round
     #The swapped status is the output of the 16th round
-    if inspect_mode:
-        roundOutputs[15] = status
+    # if inspect_mode:
+    #     roundOutputs[15] = status
 
     #Perform the inverse of the initial permutation:
     status = permutation(status, inv_ip)
 
-    return status
+    return status, roundOutputs
 
 
 #This function performs DES decryption:
@@ -713,63 +726,95 @@ def chartobyte(chararray):
 
     return output
 
+#This function transforms the bytearray lists to HEX strings for output to terminal when
+#inspect mode is true:
+def toHexString(bytearrayList):
+    stringList = []
+    for i in range(len(bytearrayList)):
+        stringTemp = ""
+        singleByte = bytearray(1)
+        for j in range(len(bytearrayList[i])):
+            singleByte[0] = bytearrayList[i][j]
+            stringTemp = stringTemp + singleByte.hex().upper()
 
+        stringList.append(stringTemp)
+
+    return stringList
 
 ##### TESTING CODE ######
 
 if __name__ == "__main__":
+    print("Jello")
 
-    # string = "Hello, hoe gaan dit vandag?"
+    # # string = "Hello, hoe gaan dit vandag?"
+    # #
+    # # bytearr = np.empty(len(string),dtype=np.byte)
+    # # for i in range(len(string)):
+    # #     bytearr[i] = ord(string[i])
+    # #
+    # # bytearr[0] &= 0xFF
+    # # print(bytearr)
+    # #
+    # # toets = 0
+    # #
+    # # stringEncoded = string.encode(encoding="ascii",errors="ignore")
+    # # #print(stringEncoded)
+    # # stringEncoded = bytearray(stringEncoded)
+    # # stringEncoded[0] = stringEncoded[0]^255
+    # # #print(stringEncoded)
+    # #
+    # # TDEA_Encrypt("Cat")
+    # #
+    # # permutationL = np.load("Practical 2 File Package/DES_Initial_Permutation.npy")
+    # # permutationL = np.array(permutationL, dtype=int)
+    # # print(permutationL)
+    # #
+    # # bytearr = bytearray("d",encoding="ascii")
+    # # print(bytearr)
+    # #
+    # # print(permutation(bytearr, [3,4,7,6,5,2,8,1]))
+    # #
+    # # permutationChoice1 = np.load("Practical 2 File Package/DES_Permutation_Choice1.npy")
+    # # print(permutationChoice1)
+    # # print(len(permutationChoice1))
+    # #
+    # # bytearr = bytearray("de", encoding="ascii")
+    # # print(shiftLeft(bytearray("hi", encoding="ascii"), 1))
+    # # print("Hi")
+    # #
+    # # toets = bytearray(5)
+    # # toets[1] = 5
+    # # print(toets)
     #
-    # bytearr = np.empty(len(string),dtype=np.byte)
-    # for i in range(len(string)):
-    #     bytearr[i] = ord(string[i])
     #
-    # bytearr[0] &= 0xFF
-    # print(bytearr)
+    # #Toets die key generation:
     #
-    # toets = 0
+    # initKey = bytearray([0x13,0x34,0x57,0x79,0x9B,0xBC,0xDF,0xF1])
+    # #initKey = "4Wy¼ßñ"
+    # permuteKey = [57,49,41,33,25,17,9,1,58,50,42,34,26,18,10,2,59,51,43,35,27,19,11,3,60,52,44,36,63,55,47,39,31,23,15,7,62,54,46,38,30,22,14,6,61,53,45,37,29,21,13,5,28,20,12,4]
+    # permuteRound = [14,17,11,24,1,5,3,28,15,6,21,10,23,19,12,4,26,8,16,7,27,20,13,2,41,52,31,37,47,55,30,40,51,45,33,48,44,49,39,56,34,53,46,42,50,36,29,32]
     #
-    # stringEncoded = string.encode(encoding="ascii",errors="ignore")
-    # #print(stringEncoded)
-    # stringEncoded = bytearray(stringEncoded)
-    # stringEncoded[0] = stringEncoded[0]^255
-    # #print(stringEncoded)
+    # IP=[58,50,42,34,26,18,10,2,60,52,44,36,28,20,12,4,62,54,46,38,30,22,14,6,64,56,48,40,32,24,16,8,57,49,41,33,25,17,9,1,59,51,43,35,27,19,11,3,61,53,45,37,29,21,13,5,63,55,47,39,31,23,15,7]
     #
-    # TDEA_Encrypt("Cat")
+    # # # Calculate the inverse of the initial permutation:
+    # # inv_ip = np.zeros(len(IP))
+    # # for i in range(1,len(IP)+1):
+    # #     # Find index i in the initial permutation:
+    # #     inv_ip[i-1] = IP.index(i) + 1
+    # #
+    # # print(IP)
+    # # print(inv_ip)
     #
-    # permutationL = np.load("Practical 2 File Package/DES_Initial_Permutation.npy")
-    # permutationL = np.array(permutationL, dtype=int)
-    # print(permutationL)
     #
-    # bytearr = bytearray("d",encoding="ascii")
-    # print(bytearr)
+    # print(keyGeneration(initKey,permuteKey,permuteRound))
     #
-    # print(permutation(bytearr, [3,4,7,6,5,2,8,1]))
+    # # testkey = bytearray([0xF0,0xCC,0xAA,0xF5,0x56,0x67,0x8F])
+    # # print(shiftKeyHalvesLeft(testkey,1))
     #
-    # permutationChoice1 = np.load("Practical 2 File Package/DES_Permutation_Choice1.npy")
-    # print(permutationChoice1)
-    # print(len(permutationChoice1))
+    # subkeys = keyGeneration(initKey,permuteKey,permuteRound)
     #
-    # bytearr = bytearray("de", encoding="ascii")
-    # print(shiftLeft(bytearray("hi", encoding="ascii"), 1))
-    # print("Hi")
+IP=[58,50,42,34,26,18,10,2,60,52,44,36,28,20,12,4,62,54,46,38,30,22,14,6,64,56,48,40,32,24,16,8,57,49,41,33,25,17,9,1,59,51,43,35,27,19,11,3,61,53,45,37,29,21,13,5,63,55,47,39,31,23,15,7]
     #
-    # toets = bytearray(5)
-    # toets[1] = 5
-    # print(toets)
-
-
-    #Toets die key generation:
-
-    initKey = bytearray([0x13,0x34,0x57,0x79,0x9B,0xBC,0xDF,0xF1])
-    #initKey = "4Wy¼ßñ"
-    permuteKey = [57,49,41,33,25,17,9,1,58,50,42,34,26,18,10,2,59,51,43,35,27,19,11,3,60,52,44,36,63,55,47,39,31,23,15,7,62,54,46,38,30,22,14,6,61,53,45,37,29,21,13,5,28,20,12,4]
-    permuteRound = [14,17,11,24,1,5,3,28,15,6,21,10,23,19,12,4,26,8,16,7,27,20,13,2,41,52,31,37,47,55,30,40,51,45,33,48,44,49,39,56,34,53,46,42,50,36,29,32]
-
-    IP=[58,50,42,34,26,18,10,2,60,52,44,36,28,20,12,4,62,54,46,38,30,22,14,6,64,56,48,40,32,24,16,8,57,49,41,33,25,17,9,1,59,51,43,35,27,19,11,3,61,53,45,37,29,21,13,5,63,55,47,39,31,23,15,7]
-
-    # # Calculate the inverse of the initial permutation:
     # inv_ip = np.zeros(len(IP))
     # for i in range(1,len(IP)+1):
     #     # Find index i in the initial permutation:
@@ -777,71 +822,53 @@ if __name__ == "__main__":
     #
     # print(IP)
     # print(inv_ip)
-
-
-    print(keyGeneration(initKey,permuteKey,permuteRound))
-
-    # testkey = bytearray([0xF0,0xCC,0xAA,0xF5,0x56,0x67,0x8F])
-    # print(shiftKeyHalvesLeft(testkey,1))
-
-    subkeys = keyGeneration(initKey,permuteKey,permuteRound)
-
-    IP=[58,50,42,34,26,18,10,2,60,52,44,36,28,20,12,4,62,54,46,38,30,22,14,6,64,56,48,40,32,24,16,8,57,49,41,33,25,17,9,1,59,51,43,35,27,19,11,3,61,53,45,37,29,21,13,5,63,55,47,39,31,23,15,7]
-
-    inv_ip = np.zeros(len(IP))
-    for i in range(1,len(IP)+1):
-        # Find index i in the initial permutation:
-        inv_ip[i-1] = IP.index(i) + 1
-
-    print(IP)
-    print(inv_ip)
-
-    plaintext = bytearray([0x01,0x23,0x45,0x67,0x89,0xAB,0xCD,0xEF])
-
-    ciphertext = DES_Encryption(plaintext,subkeys,IP,inv_ip, 0)
-
-    plaintextDecrypted = DES_Decryption(ciphertext, subkeys, IP, inv_ip, 0, False)
-
-    print(ciphertext)
-    print(plaintextDecrypted)
-
-
-
-
-
+    #
+    # plaintext = bytearray([0x01,0x23,0x45,0x67,0x89,0xAB,0xCD,0xEF])
+    #
+    # ciphertext = DES_Encryption(plaintext,subkeys,IP,inv_ip, 0)
+    #
+    # plaintextDecrypted = DES_Decryption(ciphertext, subkeys, IP, inv_ip, 0, False)
+    #
+    # print(ciphertext)
+    # print(plaintextDecrypted)
     #
     #
-    # RHS = bytearray([0x7A,0x15,0x55,0x7A,0x15,0x55])
-    # #print(F(RHS,subkeys[0]))
     #
-    # toetsalweer = [bytearray(1)]*5
-    # print(toetsalweer)
     #
-    # print(list(np.load("Practical 2 File Package/DES_Permutation_Choice2.npy")))
-    # print(len(list(np.load("Practical 2 File Package/DES_Permutation_Choice2.npy"))))
-
-
-    print("\nHoof encrypt results:")
-
-    tdeaCiphertext = TDEA_Encrypt("HelloMan123345Hoe gaan dit?", 0, "abcdefgh", "abcdkfgh", "abxdefgh", IP)
-
-    tdeaPlaintextDecrypt = TDEA_Decrypt(0, tdeaCiphertext, "abcdefgh", "abcdkfgh", "abxdefgh", IP)
-
-    print(tdeaCiphertext)
-    print(tdeaPlaintextDecrypt)
-
-
-    #Test Image:
-    p_File = Image.open('office.png')
-    p_img = np.asarray(p_File)
-    imgENC = TDEA_Encrypt(p_img, 0, "abcdefgh", "abcdkfgh", "abxdefgh", IP)
-
-    Image.fromarray(imgENC.astype(np.uint8)).save('office_encrypted.png')
-
-    print("Image Encryption Done")
-
-    p_File = Image.open('office_encrypted.png')
-    p_img = np.asarray(p_File)
-    imgENC = TDEA_Decrypt(0, p_img, "abcdefgh", "abcdkfgh", "abxdefgh", IP)
-
-    Image.fromarray(imgENC.astype(np.uint8)).save('office_decrypted.png')
+    #
+    # #
+    # #
+    # # RHS = bytearray([0x7A,0x15,0x55,0x7A,0x15,0x55])
+    # # #print(F(RHS,subkeys[0]))
+    # #
+    # # toetsalweer = [bytearray(1)]*5
+    # # print(toetsalweer)
+    # #
+    # # print(list(np.load("Practical 2 File Package/DES_Permutation_Choice2.npy")))
+    # # print(len(list(np.load("Practical 2 File Package/DES_Permutation_Choice2.npy"))))
+    #
+    #
+print("\nHoof encrypt results:")
+    #
+tdeaCiphertext = TDEA_Encrypt("HelloMan123345Hoe gaan dit?", 1, "abcdefgh", "abcdkfgh", "abxdefgh", IP)
+    #
+    #tdeaPlaintextDecrypt = TDEA_Decrypt(0, tdeaCiphertext, "abcdefgh", "abcdkfgh", "abxdefgh", IP)
+    #
+print(tdeaCiphertext)
+    #print(tdeaPlaintextDecrypt)
+    #
+    #
+    # #Test Image:
+    # p_File = Image.open('office.png')
+    # p_img = np.asarray(p_File)
+    # imgENC = TDEA_Encrypt(p_img, 0, "abcdefgh", "abcdkfgh", "abxdefgh", IP)
+    #
+    # Image.fromarray(imgENC.astype(np.uint8)).save('office_encrypted.png')
+    #
+    # print("Image Encryption Done")
+    #
+    # p_File = Image.open('office_encrypted.png')
+    # p_img = np.asarray(p_File)
+    # imgENC = TDEA_Decrypt(0, p_img, "abcdefgh", "abcdkfgh", "abxdefgh", IP)
+    #
+    # Image.fromarray(imgENC.astype(np.uint8)).save('office_decrypted.png')
