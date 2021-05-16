@@ -92,8 +92,6 @@ def TDEA_Encrypt(plaintext, inspect_mode = 0, key1 = 'abcdefgh', key2 = 'abcdefg
         for index in range(len(status)):
             status[index], roundEncryption2arr = DES_Encryption(status[index], subkeys, ip, inv_ip, inspect_mode)
 
-        print(status)
-
         ciphertextOutput = ""
         #Convert to and return chars
         for blockIndex in range(len(status)):
@@ -176,7 +174,16 @@ def TDEA_Encrypt(plaintext, inspect_mode = 0, key1 = 'abcdefgh', key2 = 'abcdefg
             for i in range(len(inputbytearray)):
                 parameterList[i] = (inputbytearray[i], subkeys, ip, inv_ip, inspect_mode)
 
-            status = p.starmap(DES_Encryption, parameterList)
+            result = p.starmap(DES_Encryption, parameterList)
+
+            #TODO: Vind uit of the inspect_mode = true ook kan geld vir images, voeg dan die orals by:
+
+            # #Break down the tuple returned: each entry has (status (output), round outputs list)
+            # #Get the round outputs (Also returned by the Encryption algorithm):
+            # roundEncryption1arr = [retval[1] for retval in result]
+
+            #Get the byte outputs for all the bytes:
+            status = [retval[0] for retval in result]
 
 
             # Second triple DES round, decryption with key2:
@@ -195,7 +202,9 @@ def TDEA_Encrypt(plaintext, inspect_mode = 0, key1 = 'abcdefgh', key2 = 'abcdefg
             for i in range(len(inputbytearray)):
                 parameterList[i] = (status[i], subkeys, ip, inv_ip, inspect_mode)
 
-            status = p.starmap(DES_Decryption, parameterList)
+            result = p.starmap(DES_Decryption, parameterList)
+
+            status = [retval[0] for retval in result]
 
             #Third and final triple DES round, encryption with key3:
 
@@ -208,7 +217,9 @@ def TDEA_Encrypt(plaintext, inspect_mode = 0, key1 = 'abcdefgh', key2 = 'abcdefg
             for i in range(len(inputbytearray)):
                 parameterList[i] = (status[i], subkeys, ip, inv_ip, inspect_mode)
 
-            status = p.starmap(DES_Encryption, parameterList)
+            result = p.starmap(DES_Encryption, parameterList)
+
+            status = [retval[0] for retval in result]
 
             index = 0
             indexIntoBytearray = 0
@@ -222,6 +233,26 @@ def TDEA_Encrypt(plaintext, inspect_mode = 0, key1 = 'abcdefgh', key2 = 'abcdefg
                             index += 1
                             indexIntoBytearray = 0
 
+            # The last few bits were possibly not encrypted, if numPixels // 8 != 0
+            # Thus the last few is xored with the first, second ect image values of the original image:
+            numMissed = ((numRows) * numColumns) % 8
+            indexRow = numRows - 1
+            indexColumn = numColumns - 1
+            beginRow = 0
+            beginColumn = 0
+            for index in range(numMissed):
+                cipherText[indexRow][indexColumn][layer] = plaintextCopy[indexRow][indexColumn][layer] ^ plaintextCopy[beginRow][beginColumn][layer]
+                indexColumn -= 1
+                if indexColumn < 0:
+                    indexRow -= 1
+                    indexColumn = numColumns - 1
+
+                beginColumn += 1
+                if beginColumn >= numColumns:
+                    beginColumn = 0
+                    beginRow += 1
+
+        #Add the alpha layer, if present, unencrypted:
         if bAlphaLayer:
             cipherText = np.dstack((cipherText, alpha_layer))
 
@@ -229,9 +260,7 @@ def TDEA_Encrypt(plaintext, inspect_mode = 0, key1 = 'abcdefgh', key2 = 'abcdefg
 
 
 def TDEA_Decrypt(inspect_mode, ciphertext, key1, key2, key3, inv_ip):
-    print("3DES Decryption")
-
-    # Calculate the inverse of the initial permutation:
+    # Calculate the the initial permutation:
     ip = np.zeros(len(inv_ip))
     for i in range(1, len(inv_ip) + 1):
         # Find index i in the initial permutation:
@@ -328,9 +357,6 @@ def TDEA_Decrypt(inspect_mode, ciphertext, key1, key2, key3, inv_ip):
             return {"DES1_Outputs": roundDecryption1arr, "DES2_Outputs": roundEncryption2arr,
                     "DES3_Outputs": roundDecryption3arr, "Ciphertext": plaintextOutput}
 
-
-
-
     # If the ciphertext is an image (ndarray) that needs to be encrypted:
     if (isinstance(ciphertext, np.ndarray)):
 
@@ -398,7 +424,9 @@ def TDEA_Decrypt(inspect_mode, ciphertext, key1, key2, key3, inv_ip):
             for k in range(len(inputbytearray)):
                 parameterList[k] = (inputbytearray[k], subkeys, ip, inv_ip, inspect_mode)
 
-            status = p.starmap(DES_Decryption, parameterList)
+            result = p.starmap(DES_Decryption, parameterList)
+
+            status = [retval[0] for retval in result]
 
             # Second triple DES round, encryption with key2:
 
@@ -410,7 +438,9 @@ def TDEA_Decrypt(inspect_mode, ciphertext, key1, key2, key3, inv_ip):
             for k in range(len(inputbytearray)):
                 parameterList[k] = (status[k], subkeys, ip, inv_ip, inspect_mode)
 
-            status = p.starmap(DES_Encryption, parameterList)
+            result = p.starmap(DES_Encryption, parameterList)
+
+            status = [retval[0] for retval in result]
 
             # Third and final triple DES round, encryption with key3:
 
@@ -429,7 +459,9 @@ def TDEA_Decrypt(inspect_mode, ciphertext, key1, key2, key3, inv_ip):
             for k in range(len(inputbytearray)):
                 parameterList[k] = (status[k], subkeys, ip, inv_ip, inspect_mode)
 
-            status = p.starmap(DES_Decryption, parameterList)
+            result = p.starmap(DES_Decryption, parameterList)
+
+            status = [retval[0] for retval in result]
 
             index = 0
             indexIntoBytearray = 0
@@ -443,6 +475,26 @@ def TDEA_Decrypt(inspect_mode, ciphertext, key1, key2, key3, inv_ip):
                             index += 1
                             indexIntoBytearray = 0
 
+            # The last few bits were possibly not encrypted, if numPixels // 8 != 0
+            # Thus the last few is xored with the first, second ect image values of the original image:
+            numMissed = ((numRows) * numColumns) % 8
+            indexRow = numRows - 1
+            indexColumn = numColumns - 1
+            beginRow = 0
+            beginColumn = 0
+            for index in range(numMissed):
+                plaintext[indexRow][indexColumn][layer] = ciphertextCopy[indexRow][indexColumn][layer] ^ plaintext[beginRow][beginColumn][layer]
+                indexColumn -= 1
+                if indexColumn < 0:
+                    indexRow -= 1
+                    indexColumn = numColumns - 1
+
+                beginColumn += 1
+                if beginColumn >= numColumns:
+                    beginColumn = 0
+                    beginRow += 1
+
+        #Add the alpha layer, if present, the alpha layer was not encrypted
         if bAlphaLayer:
             cipherText = np.dstack((plaintext, alpha_layer))
 
@@ -830,7 +882,7 @@ if __name__ == "__main__":
     #
     # subkeys = keyGeneration(initKey,permuteKey,permuteRound)
     #
-IP=[58,50,42,34,26,18,10,2,60,52,44,36,28,20,12,4,62,54,46,38,30,22,14,6,64,56,48,40,32,24,16,8,57,49,41,33,25,17,9,1,59,51,43,35,27,19,11,3,61,53,45,37,29,21,13,5,63,55,47,39,31,23,15,7]
+    IP=[58,50,42,34,26,18,10,2,60,52,44,36,28,20,12,4,62,54,46,38,30,22,14,6,64,56,48,40,32,24,16,8,57,49,41,33,25,17,9,1,59,51,43,35,27,19,11,3,61,53,45,37,29,21,13,5,63,55,47,39,31,23,15,7]
     #
     # inv_ip = np.zeros(len(IP))
     # for i in range(1,len(IP)+1):
@@ -865,30 +917,30 @@ IP=[58,50,42,34,26,18,10,2,60,52,44,36,28,20,12,4,62,54,46,38,30,22,14,6,64,56,4
     # # print(len(list(np.load("Practical 2 File Package/DES_Permutation_Choice2.npy"))))
     #
     #
-print("\nHoof encrypt results:")
+    print("\nHoof encrypt results:")
     #
-tdeaCiphertext = TDEA_Encrypt("HelloMan123345Hoe gaan dit?", 1, "abcdefgh", "abcdkfgh", "abxdefgh", IP)
+    tdeaCiphertext = TDEA_Encrypt("HelloMan123345Hoe gaan dit?", 1, "abcdefgh", "abcdkfgh", "abxdefgh", IP)
     #
 
-INV_IP = [40.0, 8.0, 48.0, 16.0, 56.0, 24.0, 64.0, 32.0, 39.0, 7.0, 47.0, 15.0, 55.0, 23.0, 63.0, 31.0, 38.0, 6.0, 46.0, 14.0, 54.0, 22.0, 62.0, 30.0, 37.0, 5.0, 45.0, 13.0, 53.0, 21.0, 61.0, 29.0, 36.0, 4.0, 44.0, 12.0, 52.0, 20.0, 60.0, 28.0, 35.0, 3.0, 43.0, 11.0, 51.0, 19.0, 59.0, 27.0, 34.0, 2.0, 42.0, 10.0, 50.0, 18.0, 58.0, 26.0, 33.0, 1.0, 41.0, 9.0, 49.0, 17.0, 57.0, 25.0]
-tdeaPlaintextDecrypt = TDEA_Decrypt(1, tdeaCiphertext["Ciphertext"], "abcdefgh", "abcdkfgh", "abxdefgh", INV_IP)
-print("Encryption:")
-print(tdeaCiphertext)
-print("Decryption:")
-print(tdeaPlaintextDecrypt)
+    INV_IP = [40.0, 8.0, 48.0, 16.0, 56.0, 24.0, 64.0, 32.0, 39.0, 7.0, 47.0, 15.0, 55.0, 23.0, 63.0, 31.0, 38.0, 6.0, 46.0, 14.0, 54.0, 22.0, 62.0, 30.0, 37.0, 5.0, 45.0, 13.0, 53.0, 21.0, 61.0, 29.0, 36.0, 4.0, 44.0, 12.0, 52.0, 20.0, 60.0, 28.0, 35.0, 3.0, 43.0, 11.0, 51.0, 19.0, 59.0, 27.0, 34.0, 2.0, 42.0, 10.0, 50.0, 18.0, 58.0, 26.0, 33.0, 1.0, 41.0, 9.0, 49.0, 17.0, 57.0, 25.0]
+    tdeaPlaintextDecrypt = TDEA_Decrypt(1, tdeaCiphertext["Ciphertext"], "abcdefgh", "abcdkfgh", "abxdefgh", INV_IP)
+    print("Encryption:")
+    print(tdeaCiphertext)
+    print("Decryption:")
+    print(tdeaPlaintextDecrypt)
     #
     #
-    # #Test Image:
-    # p_File = Image.open('office.png')
-    # p_img = np.asarray(p_File)
-    # imgENC = TDEA_Encrypt(p_img, 0, "abcdefgh", "abcdkfgh", "abxdefgh", IP)
-    #
-    # Image.fromarray(imgENC.astype(np.uint8)).save('office_encrypted.png')
-    #
-    # print("Image Encryption Done")
-    #
-    # p_File = Image.open('office_encrypted.png')
-    # p_img = np.asarray(p_File)
-    # imgENC = TDEA_Decrypt(0, p_img, "abcdefgh", "abcdkfgh", "abxdefgh", IP)
-    #
-    # Image.fromarray(imgENC.astype(np.uint8)).save('office_decrypted.png')
+    #Test Image:
+    p_File = Image.open('office.png')
+    p_img = np.asarray(p_File)
+    imgENC = TDEA_Encrypt(p_img, 0, "abcdefgh", "abcdkfgh", "abxdefgh", IP)
+
+    Image.fromarray(imgENC.astype(np.uint8)).save('office_encrypted.png')
+
+    print("Image Encryption Done")
+
+    p_File = Image.open('office_encrypted.png')
+    p_img = np.asarray(p_File)
+    imgENC = TDEA_Decrypt(0, p_img, "abcdefgh", "abcdkfgh", "abxdefgh", INV_IP)
+
+    Image.fromarray(imgENC.astype(np.uint8)).save('office_decrypted.png')
