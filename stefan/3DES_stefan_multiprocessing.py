@@ -2,6 +2,7 @@
 # 3DES encryption and decryption
 # Group 7
 # Created: 2 May 2021 by Stefan Buys
+from pydoc import plain
 
 import numpy as np
 import copy
@@ -227,14 +228,14 @@ def TDEA_Encrypt(plaintext, inspect_mode = 0, key1 = 'abcdefgh', key2 = 'abcdefg
         return cipherText.astype(int)
 
 
-def TDEA_Decrypt(inspect_mode, ciphertext, key1, key2, key3, ip):
+def TDEA_Decrypt(inspect_mode, ciphertext, key1, key2, key3, inv_ip):
     print("3DES Decryption")
 
     # Calculate the inverse of the initial permutation:
-    inv_ip = np.zeros(len(ip))
-    for i in range(1, len(ip) + 1):
+    ip = np.zeros(len(inv_ip))
+    for i in range(1, len(inv_ip) + 1):
         # Find index i in the initial permutation:
-        inv_ip[i - 1] = ip.index(i) + 1
+        ip[i - 1] = inv_ip.index(i) + 1
 
     ### Plaintext Encoding ###
 
@@ -275,7 +276,7 @@ def TDEA_Decrypt(inspect_mode, ciphertext, key1, key2, key3, ip):
         #Perform first DES encryption on all blocks of 64 bits:
 
         for index in range(len(ciphertextBlocks)):
-            status[index] = DES_Decryption(ciphertextBlocks[index], subkeys, ip, inv_ip, inspect_mode)
+            status[index], roundDecryption1arr = DES_Decryption(ciphertextBlocks[index], subkeys, ip, inv_ip, inspect_mode)
 
 
         #Second triple DES round, encryption with key2:
@@ -285,7 +286,7 @@ def TDEA_Decrypt(inspect_mode, ciphertext, key1, key2, key3, ip):
         subkeys = keyGeneration(key2bytes, keyInitialPermutation, keyRoundPermutation)
 
         for index in range(len(status)):
-            status[index] = DES_Encryption(status[index], subkeys, ip, inv_ip, inspect_mode)
+            status[index], roundEncryption2arr = DES_Encryption(status[index], subkeys, ip, inv_ip, inspect_mode)
 
 
         #Third and final triple DES round, encryption with key3:
@@ -302,7 +303,7 @@ def TDEA_Decrypt(inspect_mode, ciphertext, key1, key2, key3, ip):
 
         #Perform final DES encryption on all blocks of 64 bits:
         for index in range(len(status)):
-            status[index] = DES_Encryption(status[index], subkeys, ip, inv_ip, inspect_mode)
+            status[index], roundDecryption3arr = DES_Encryption(status[index], subkeys, ip, inv_ip, inspect_mode)
 
         print(status)
 
@@ -312,7 +313,23 @@ def TDEA_Decrypt(inspect_mode, ciphertext, key1, key2, key3, ip):
             for charIndex in range(8):
                 plaintextOutput = plaintextOutput + chr(status[blockIndex][charIndex])
 
-        return plaintextOutput
+        #Remove the trailling 0x00 (NUL) characters from the back of the plaintext, added for padding:
+        while ord(plaintextOutput[len(plaintextOutput)-1]) == 0:
+            plaintextOutput = plaintextOutput[0:-1]
+
+        if not (inspect_mode):
+            return plaintextOutput
+        else:
+            # Create the hex array inspect mode output:
+            roundDecryption1arr = np.array(toHexString(roundDecryption1arr))
+            roundEncryption2arr = np.array(toHexString(roundEncryption2arr))
+            roundDecryption3arr = np.array(toHexString(roundDecryption3arr))
+
+            return {"DES1_Outputs": roundDecryption1arr, "DES2_Outputs": roundEncryption2arr,
+                    "DES3_Outputs": roundDecryption3arr, "Ciphertext": plaintextOutput}
+
+
+
 
     # If the ciphertext is an image (ndarray) that needs to be encrypted:
     if (isinstance(ciphertext, np.ndarray)):
@@ -852,10 +869,13 @@ print("\nHoof encrypt results:")
     #
 tdeaCiphertext = TDEA_Encrypt("HelloMan123345Hoe gaan dit?", 1, "abcdefgh", "abcdkfgh", "abxdefgh", IP)
     #
-    #tdeaPlaintextDecrypt = TDEA_Decrypt(0, tdeaCiphertext, "abcdefgh", "abcdkfgh", "abxdefgh", IP)
-    #
+
+INV_IP = [40.0, 8.0, 48.0, 16.0, 56.0, 24.0, 64.0, 32.0, 39.0, 7.0, 47.0, 15.0, 55.0, 23.0, 63.0, 31.0, 38.0, 6.0, 46.0, 14.0, 54.0, 22.0, 62.0, 30.0, 37.0, 5.0, 45.0, 13.0, 53.0, 21.0, 61.0, 29.0, 36.0, 4.0, 44.0, 12.0, 52.0, 20.0, 60.0, 28.0, 35.0, 3.0, 43.0, 11.0, 51.0, 19.0, 59.0, 27.0, 34.0, 2.0, 42.0, 10.0, 50.0, 18.0, 58.0, 26.0, 33.0, 1.0, 41.0, 9.0, 49.0, 17.0, 57.0, 25.0]
+tdeaPlaintextDecrypt = TDEA_Decrypt(1, tdeaCiphertext["Ciphertext"], "abcdefgh", "abcdkfgh", "abxdefgh", INV_IP)
+print("Encryption:")
 print(tdeaCiphertext)
-    #print(tdeaPlaintextDecrypt)
+print("Decryption:")
+print(tdeaPlaintextDecrypt)
     #
     #
     # #Test Image:
