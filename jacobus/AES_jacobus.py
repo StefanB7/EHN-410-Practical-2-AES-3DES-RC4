@@ -100,11 +100,11 @@ def AES_Encrypt(inspect_mode, plaintext, iv, key, sbox_array):
     p.join()
 
     if type(plaintext) is not np.ndarray:
-        encrypted_bytes0 = np.array(result.get()[0])
+        encrypted_bytes0 = np.array(result.get()[0], dtype=object)
     else:    
-        encrypted_bytes0 = np.array(result.get()[0])
-        encrypted_bytes1 = np.array(result.get()[1])
-        encrypted_bytes2 = np.array(result.get()[2])
+        encrypted_bytes0 = np.array(result.get()[0][0])
+        encrypted_bytes1 = np.array(result.get()[1][0])
+        encrypted_bytes2 = np.array(result.get()[2][0])
 
 
     # Pixels that did not fit within the cipher block size
@@ -126,11 +126,17 @@ def AES_Encrypt(inspect_mode, plaintext, iv, key, sbox_array):
 
     if encrypted_bytes2 is None:
         if inspect_mode:
-            print(inspect_rounds_states)
 
-        enc_t = bytearray(encrypted_bytes0).decode(encoding='unicode_escape',errors='ignore')
+            enc_t = bytearray(encrypted_bytes0[0]).decode(encoding='unicode_escape',errors='ignore')
+
+            result = {"States" : np.array(encrypted_bytes0[1]),"Ciphertext" : enc_t}
+
+            return result
+
+        else:
+            enc_t = bytearray(encrypted_bytes0[0]).decode(encoding='unicode_escape',errors='ignore')
         
-        return enc_t
+            return enc_t
     else:
         
         encrypted_bytes0 = encrypted_bytes0.reshape(P[:,:,0].shape[0],P[:,:,0].shape[1])
@@ -175,10 +181,6 @@ def AES_Loop_MP_ENC(key,sbox_array,arg_iv,iblocks,plain_bytes,inspect_rounds_sta
         # Add round key
         bytes_block = AddRoundKey(k0, bytes_block)
 
-        # save round state
-        if inspect_mode:
-            inspect_rounds_states.append(bytes_block)
-
         # Round 1 to 13:
         for round in range(13):
             # Key selection from expansion
@@ -207,10 +209,6 @@ def AES_Loop_MP_ENC(key,sbox_array,arg_iv,iblocks,plain_bytes,inspect_rounds_sta
         # AddRoundKey
         bytes_block = AddRoundKey(k14, bytes_block)
 
-        # save round state
-        if inspect_mode:
-                inspect_rounds_states.append(bytes_block)
-
         # Save previous encrypted block for CBC (Cipher block chaining)
         prev_block = bytes_block
 
@@ -222,10 +220,13 @@ def AES_Loop_MP_ENC(key,sbox_array,arg_iv,iblocks,plain_bytes,inspect_rounds_sta
         else:
             encrypted_bytes = np.concatenate((encrypted_bytes, np.array(bytes_block.reshape(1, -1)[0])), axis=None)
 
-    return encrypted_bytes
+    return [encrypted_bytes,inspect_rounds_states]
 
 # AES Decryption
 def AES_Decrypt(inspect_mode, ciphertext, iv, key, inv_sbox_array):
+
+    inspect_rounds_states = []
+
     decrypted_bytes0 = None
     decrypted_bytes1 = None
     decrypted_bytes2 = None
@@ -245,8 +246,11 @@ def AES_Decrypt(inspect_mode, ciphertext, iv, key, inv_sbox_array):
     # Prepare byte matrix for ciphertext decryption
     if type(ciphertext) is not np.ndarray:
         
-        # First dimension is for plain text or Red channel, second for Green channel and third for Blue channel
-        cipher_bytes = [getBitsandPad(ciphertext)]
+        if type(ciphertext) is dict:
+            cipher_bytes = [getBitsandPad(ciphertext['Ciphertext'])]
+        else:
+            # First dimension is for plain text or Red channel, second for Green channel and third for Blue channel
+            cipher_bytes = [getBitsandPad(ciphertext)]
 
         # how many blocks there is to encrypt
         iblocks = cipher_bytes[0].shape[0] // 4 
@@ -289,11 +293,11 @@ def AES_Decrypt(inspect_mode, ciphertext, iv, key, inv_sbox_array):
     p.join()
 
     if type(ciphertext) is not np.ndarray:
-        decrypted_bytes0 = np.array(result.get()[0])    
+        decrypted_bytes0 = np.array(result.get()[0], dtype=object)    
     else:
-        decrypted_bytes0 = np.array(result.get()[0])
-        decrypted_bytes1 = np.array(result.get()[1])
-        decrypted_bytes2 = np.array(result.get()[2])
+        decrypted_bytes0 = np.array(result.get()[0][0])
+        decrypted_bytes1 = np.array(result.get()[1][0])
+        decrypted_bytes2 = np.array(result.get()[2][0])
 
 
     # Pixels that did not fit within the cipher block size
@@ -315,13 +319,18 @@ def AES_Decrypt(inspect_mode, ciphertext, iv, key, inv_sbox_array):
 
     if decrypted_bytes2 is None:
 
-        dec_t = np.array([chr(value) for value in np.squeeze(decrypted_bytes0)])
+        if inspect_mode:
 
-        str = "".join(dec_t)
+            dec_t = bytearray(np.squeeze(decrypted_bytes0[0])).decode('unicode_escape')
 
-        a = bytearray(np.squeeze(decrypted_bytes0)).decode('unicode_escape')
+            result = {"States" : np.array(decrypted_bytes0[1]),"Ciphertext" : dec_t}
 
-        return a
+            return result
+
+        else:
+            dec_t = bytearray(np.squeeze(decrypted_bytes0[0])).decode('unicode_escape')
+
+            return dec_t
     else:
         
         decrypted_bytes0 = decrypted_bytes0.reshape(C[:,:,0].shape[0],C[:,:,0].shape[1])
@@ -371,15 +380,16 @@ def AES_Loop_MP_DEC(key,inv_sbox_array,iv,iblocks,cipher_bytes):
 
     rr = result.get()
 
-    decrypted_bytes = np.array(rr[0].reshape(1, -1))
+    decrypted_bytes = np.array(rr[0][0].reshape(1, -1))
 
     for i in range(1,len(rr)):
-        decrypted_bytes = np.concatenate((decrypted_bytes,np.array(rr[i].reshape(1, -1))), axis=None)
+        decrypted_bytes = np.concatenate((decrypted_bytes,np.array(rr[i][0].reshape(1, -1))), axis=None)
 
-    return decrypted_bytes
+    return [decrypted_bytes,rr[0][1]]
 
 # Each block is done in a different process
 def AES_Decrypt_blocks(bytes_block,bytes_key,inv_sbox_array,xorBlock):
+    inspect_rounds_states = []
     # Round 0:
     # Key selection from expansion
     k0 = bytes_key[:, 56:60]
@@ -399,6 +409,9 @@ def AES_Decrypt_blocks(bytes_block,bytes_key,inv_sbox_array,xorBlock):
         # Inverse MixColumns
         bytes_block = inv_MixColumns(bytes_block)
 
+        # save round state
+        inspect_rounds_states.append(bytes_block)
+
     # Round 14:
     # Key selection from expansion
     k14 = bytes_key[:, 0:4]
@@ -412,7 +425,7 @@ def AES_Decrypt_blocks(bytes_block,bytes_key,inv_sbox_array,xorBlock):
     # CBC step:
     bytes_block = XOR(bytes_block, xorBlock)
 
-    return bytes_block
+    return [bytes_block,inspect_rounds_states]
 
 ############################ Helper functions: ###########################
 
@@ -738,38 +751,44 @@ if __name__ == "__main__":
 
     # key = "Picture test!"
 
-    # input = img2array('o_alph.png')
+    # input = img2array('red.png')
 
     # start = time.time()
-    # enc_img = AES_Encrypt(False, input, None, key, sbox)
+    # enc_img = AES_Encrypt(True, input, None, key, sbox)
     # end = time.time()
 
     # print("encryption: ",end-start)
 
-    # array2img(enc_img,"o_alph_enc.png")
+    # array2img(enc_img,"red_enc.png")
 
 
     # start = time.time()
-    # dec_img = AES_Decrypt(False,enc_img,None,key,inv_sbox)
+    # dec_img = AES_Decrypt(True,enc_img,None,key,inv_sbox)
     # end = time.time()
 
-    # array2img(dec_img,"o_alph_dec.png")
+    # array2img(dec_img,"red_dec.png")
 
     # print("decryption: ",end-start)
 
     key = "PERCY BYSSHE SHELLEY"
-    input = "I met a traveller from an antique land,\nWho said - 'Two vast and trunkless legs of stone\nStand in the desert. . . . Near them, on the sand,\nHalf sunk a shattered visage lies, whose frown,\nAnd wrinkled lip, and sneer of cold command,\nTell that its sculptor well those passions read\nWhich yet survive, stamped on these lifeless things,\nThe hand that mocked them, and the heart that fed;\nAnd on the pedestal, these words appear:\nMy name is Ozymandias, King of Kings;\nLook on my Works, ye Mighty, and despair!\nNothing beside remains. Round the decay\nOf that colossal Wreck, boundless and bare\nThe lone and level sands stretch far away.'"
+    # input = "I met a traveller from an antique land,\nWho said - 'Two vast and trunkless legs of stone\nStand in the desert. . . . Near them, on the sand,\nHalf sunk a shattered visage lies, whose frown,\nAnd wrinkled lip, and sneer of cold command,\nTell that its sculptor well those passions read\nWhich yet survive, stamped on these lifeless things,\nThe hand that mocked them, and the heart that fed;\nAnd on the pedestal, these words appear:\nMy name is Ozymandias, King of Kings;\nLook on my Works, ye Mighty, and despair!\nNothing beside remains. Round the decay\nOf that colossal Wreck, boundless and bare\nThe lone and level sands stretch far away.'"
 
-    #input = "Die is n toets"
+    input = "Die is n toets"
     #input = "Die si asdfaskdjfh asdkh#$%^&*(), shasdkjfh sadkjfha sdkfj amsdf askdfhalksdjfh aksdjfh alksdjf haksdjf haksdfha98sd76f9a78sd56f9a78sdf aweo8r73i4uhr ljsdkf lajkdfh lsakdj h#$%^&*(*&^%$#$%^&*(&^%$SXDCFGVBHJN"
 
-    enc_text = AES_Encrypt(False, input, None, key, sbox)
+    enc_text = AES_Encrypt(True, input, None, key, sbox)
 
-    print("encoded: ", enc_text)
+    print(enc_text["States"])
+    print("\n\n")
+    print(enc_text["Ciphertext"])
+    print("\n\n")
 
-    dec_text = AES_Decrypt(False, enc_text, None, key, inv_sbox)
+    dec_text = AES_Decrypt(True, enc_text, None, key, inv_sbox)
 
-    print(dec_text)
+    print(dec_text["States"])
+    print("\n\n")
+    print(dec_text["Ciphertext"])
+    print("\n\n")
 
 
 
@@ -787,9 +806,6 @@ if __name__ == "__main__":
 
 # TODO: vergelyk met normale DES, 3DES, ECB AES en CBC AES, CBC behoort way beter te wees selfs met eenvormige kleure
 
-# TODO: hex to ascii????
-
-# TODO: dis extended ascii so 0 to 0xFF
 
 # TODO: IV en sbox input format en die ander npy file goed
 
