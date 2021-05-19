@@ -10,11 +10,14 @@ from PIL import Image
 
 ##### MAIN CIPHER FUNCTIONS #####
 
-def RC4_Enctrypt(plaintext, key):
+def RC4_Enctrypt(inspect_mode, plaintext, key):
 
     #Generate the required stream generation variables:
     S = bytearray(256)
     T = bytearray(256)
+
+    #Stores the current state of the S table:
+    Sarchive = []
 
     #Transform key to bytearray:
     keyBytes = bytearray(len(key))
@@ -64,11 +67,18 @@ def RC4_Enctrypt(plaintext, key):
 
             cipherText[index] = plaintextBytes[index] ^ streamElement
 
+            #If inspect mode, add the S table to Sarchive:
+            if (inspect_mode):
+                Sarchive.append(makeBoxS(S))
+
         cipherTextString = ''
         for i in range(len(cipherText)):
             cipherTextString = cipherTextString + chr(cipherText[i])
 
-        return cipherTextString
+        if (inspect_mode):
+            return {"S-table": Sarchive, "Ciphertext": cipherTextString}
+        else:
+            return cipherTextString
 
 
     # If the plaintext is an image (ndarray) that needs to be encrypted:
@@ -119,6 +129,10 @@ def RC4_Enctrypt(plaintext, key):
 
                 cipherTextBytes[index] = plaintextBytes[index] ^ streamElement
 
+                # If inspect mode, add the S table to Sarchive:
+                if (inspect_mode):
+                    Sarchive.append(makeBoxS(S))
+
             #Transfer the calculated output to the ciphertext image ndarray variable:
             index = 0
             for i in range(numRows):
@@ -129,14 +143,20 @@ def RC4_Enctrypt(plaintext, key):
         if bAlphaLayer:
             cipherText = np.dstack((cipherText, alpha_layer))
 
-        return cipherText.astype(int)
+        if (inspect_mode):
+            return {"S-table": Sarchive, "Ciphertext": cipherText.astype(int)}
+        else:
+            return cipherText.astype(int)
 
 
-def RC4_Decrypt(ciphertext, key):
+def RC4_Decrypt(inspect_mode, ciphertext, key):
 
     #Generate the required stream generation variables:
     S = bytearray(256)
     T = bytearray(256)
+
+    #Stores the current state of the S table:
+    Sarchive = []
 
     #Transform key to bytearray:
     keyBytes = bytearray(len(key))
@@ -185,12 +205,18 @@ def RC4_Decrypt(ciphertext, key):
 
             plainText[index] = ciphertextBytes[index] ^ streamElement
 
+            # If inspect mode, add the S table to Sarchive:
+            if (inspect_mode):
+                Sarchive.append(makeBoxS(S))
+
         plainTextString = ''
         for i in range(len(plainText)):
             plainTextString = plainTextString + chr(plainText[i])
 
-        return plainTextString
-
+        if (inspect_mode):
+            return {"S-table": Sarchive, "Ciphertext": plainTextString}
+        else:
+            return plainTextString
 
 
     # If the plaintext is an image (ndarray) that needs to be encrypted:
@@ -241,6 +267,10 @@ def RC4_Decrypt(ciphertext, key):
 
                 plainTextBytes[index] = cipherTextBytes[index] ^ streamElement
 
+                # If inspect mode, add the S table to Sarchive:
+                if (inspect_mode):
+                    Sarchive.append(makeBoxS(S))
+
             # Transfer the calculated output to the ciphertext image ndarray variable:
             index = 0
             for i in range(numRows):
@@ -251,30 +281,50 @@ def RC4_Decrypt(ciphertext, key):
         if bAlphaLayer:
             cipherText = np.dstack((plainText, alpha_layer))
 
-        return plainText.astype(int)
+        if (inspect_mode):
+            return {"S-table": Sarchive, "Ciphertext": plainText.astype("int")}
+        else:
+            return plainText.astype("int")
 
-encrypted = RC4_Enctrypt("Hello, hoe gaan dit met jou?", "stefan")
+#This function returns a 16x16 numpy array consisting of the hex values of each byte in S_table (bytearray)
+def makeBoxS(S_table):
+    S_temp = [['' for i in range(16)] for j in range(16)]
+    index = 0
+    singleByte = bytearray(1)
+    for row in range(16):
+        for column in range(16):
+            singleByte[0] = S_table[index]
+            S_temp[row][column] = singleByte.hex().upper()
+            index += 1
+    return np.array(S_temp)
+
+
+np.set_printoptions(linewidth=300)
+encrypted = RC4_Enctrypt(True, "Hi", "stefan")
 print(encrypted)
-decrypted = RC4_Decrypt(encrypted,"stefan")
-print(decrypted)
+print(encrypted['S-table'][0])
+# decrypted = RC4_Decrypt(encrypted,"stefan")
+# print(decrypted)
+#
+# #Test Image:
+# p_File = Image.open('office.png')
+# p_img = np.asarray(p_File)
+# imgENC = RC4_Enctrypt(p_img, "stefan")
+#
+# Image.fromarray(imgENC.astype(np.uint8)).save('office_encrypted_rc4.png')
+#
+# print("Image Encryption Done")
+#
+# p_File = Image.open('office_encrypted_rc4.png')
+# p_img = np.asarray(p_File)
+# imgENC = RC4_Decrypt(p_img, "stefan")
+#
+# Image.fromarray(imgENC.astype(np.uint8)).save('office_decrypted_rc4.png')
+#
+# toets = bytearray(5)
+# toets2 = bytearray(1)
+# toets[2] = 139
+# toets2[0] = toets[2]
+# print(toets2.hex())
 
-#Test Image:
-p_File = Image.open('office.png')
-p_img = np.asarray(p_File)
-imgENC = RC4_Enctrypt(p_img, "stefan")
-
-Image.fromarray(imgENC.astype(np.uint8)).save('office_encrypted_rc4.png')
-
-print("Image Encryption Done")
-
-p_File = Image.open('office_encrypted_rc4.png')
-p_img = np.asarray(p_File)
-imgENC = RC4_Decrypt(p_img, "stefan")
-
-Image.fromarray(imgENC.astype(np.uint8)).save('office_decrypted_rc4.png')
-
-toets = bytearray(5)
-toets2 = bytearray(1)
-toets[2] = 139
-toets2[0] = toets[2]
-print(toets2.hex())
+#print(makeBoxS('hi'))
