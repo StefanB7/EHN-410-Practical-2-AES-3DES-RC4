@@ -17,7 +17,6 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 ############################ Main functions: ############################
 # Multiprocessing Classes needed to create a process within another process
 # Second/Massimiliano's solution used from the following stack overflow question: (https://stackoverflow.com/questions/6974695/python-process-pool-non-daemonic)
-# TODO: reference dit nog in report
 class NoDaemonProcess(multiprocessing.Process):
     @property
     def daemon(self):
@@ -60,7 +59,7 @@ def AES_Encrypt(inspect_mode, plaintext, iv, key, sbox_array):
         plain_bytes = [getBitsandPad(plaintext)]
 
         # how many blocks there is to encrypt
-        iblocks = plain_bytes[0].shape[0] // 4 
+        iblocks = plain_bytes[0].shape[1] // 4 
 
         param0 = (key,sbox_array,iv,iblocks,plain_bytes[0],inspect_rounds_states, True)
 
@@ -77,6 +76,7 @@ def AES_Encrypt(inspect_mode, plaintext, iv, key, sbox_array):
         b_channel = np.array(P[:,:,2]).reshape(1,P[:,:,2].shape[0]*P[:,:,2].shape[1])[0]
 
         iblocks = len(r_channel) // 16
+
 
         # check if not all blocks will be encrypted
         if len(r_channel) != 16 * (len(r_channel) // 16):
@@ -134,7 +134,8 @@ def AES_Encrypt(inspect_mode, plaintext, iv, key, sbox_array):
             return result
 
         else:
-            enc_t = bytearray(encrypted_bytes0[0]).decode(encoding='unicode_escape',errors='ignore')
+
+            enc_t = bytearray(np.array(encrypted_bytes0[0])).decode(encoding='raw_unicode_escape',errors='ignore')
         
             return enc_t
     else:
@@ -150,7 +151,6 @@ def AES_Encrypt(inspect_mode, plaintext, iv, key, sbox_array):
         else:
             return np.dstack((encrypted_bytes0.astype(int),encrypted_bytes1.astype(int),encrypted_bytes2.astype(int)))
 
-# TODO: daar is 15 rounds in AES (0-14), en dit lyk asof hulle net 13 soek, is dit die middelste 13?
 # Each RGB channel is done in a different process 
 def AES_Loop_MP_ENC(key,sbox_array,arg_iv,iblocks,plain_bytes,inspect_rounds_states = [], inspect_mode = False):
 
@@ -167,9 +167,8 @@ def AES_Loop_MP_ENC(key,sbox_array,arg_iv,iblocks,plain_bytes,inspect_rounds_sta
     prev_block = iv
     for blocks in range(iblocks):
         
-        bytes_block = plain_bytes[:4, :]
-        plain_bytes = np.array(plain_bytes[4:, :])
-
+        bytes_block = plain_bytes[:, :4]
+        plain_bytes = np.array(plain_bytes[:, 4:])
 
         # CBC step:
         # XOR input block with previous block, (IV for first block)
@@ -198,7 +197,6 @@ def AES_Loop_MP_ENC(key,sbox_array,arg_iv,iblocks,plain_bytes,inspect_rounds_sta
             if inspect_mode:
                 inspect_rounds_states.append(bytes_block)
 
-
         # Round 14 (final):
         # Key selection form expansion
         k14 = bytes_key[:, 56:60]
@@ -212,13 +210,12 @@ def AES_Loop_MP_ENC(key,sbox_array,arg_iv,iblocks,plain_bytes,inspect_rounds_sta
         # Save previous encrypted block for CBC (Cipher block chaining)
         prev_block = bytes_block
 
-    
         # save the encrypted block
                 
         if encrypted_bytes is None:
-            encrypted_bytes = np.array(bytes_block.reshape(1, -1)[0])
+            encrypted_bytes = np.array(bytes_block.transpose().reshape(1, -1)[0])
         else:
-            encrypted_bytes = np.concatenate((encrypted_bytes, np.array(bytes_block.reshape(1, -1)[0])), axis=None)
+            encrypted_bytes = np.concatenate((encrypted_bytes, np.array(bytes_block.transpose().reshape(1, -1)[0])), axis=None)
 
     return [encrypted_bytes,inspect_rounds_states]
 
@@ -248,12 +245,13 @@ def AES_Decrypt(inspect_mode, ciphertext, iv, key, inv_sbox_array):
         
         if type(ciphertext) is dict:
             cipher_bytes = [getBitsandPad(ciphertext['Ciphertext'])]
+            
         else:
             # First dimension is for plain text or Red channel, second for Green channel and third for Blue channel
             cipher_bytes = [getBitsandPad(ciphertext)]
 
         # how many blocks there is to encrypt
-        iblocks = cipher_bytes[0].shape[0] // 4 
+        iblocks = cipher_bytes[0].shape[1] // 4 
 
         param0 = (key,inv_sbox_array,iv,iblocks,cipher_bytes[0])
 
@@ -328,7 +326,7 @@ def AES_Decrypt(inspect_mode, ciphertext, iv, key, inv_sbox_array):
             return result
 
         else:
-            dec_t = bytearray(np.squeeze(decrypted_bytes0[0])).decode('unicode_escape')
+            dec_t = bytearray(np.squeeze(decrypted_bytes0[0])).decode('raw_unicode_escape')
 
             return dec_t
     else:
@@ -364,14 +362,14 @@ def AES_Loop_MP_DEC(key,inv_sbox_array,iv,iblocks,cipher_bytes):
 
     for blocks in range(iblocks):
 
-        bytes_block = cipher_bytes[:4, :]
+        bytes_block = cipher_bytes[:, :4]
         prev_block.append(bytes_block)
         
         l_b = (bytes_block,bytes_key,inv_sbox_array,prev_block.pop(0))
     
         listBlocks.append(l_b)
 
-        cipher_bytes = np.array(cipher_bytes[4:, :])
+        cipher_bytes = np.array(cipher_bytes[:, 4:])
 
     p = mp.Pool(4)    
     result = p.starmap_async(AES_Decrypt_blocks, listBlocks)
@@ -380,10 +378,10 @@ def AES_Loop_MP_DEC(key,inv_sbox_array,iv,iblocks,cipher_bytes):
 
     rr = result.get()
 
-    decrypted_bytes = np.array(rr[0][0].reshape(1, -1))
+    decrypted_bytes = np.array(rr[0][0].transpose().reshape(1, -1))
 
     for i in range(1,len(rr)):
-        decrypted_bytes = np.concatenate((decrypted_bytes,np.array(rr[i][0].reshape(1, -1))), axis=None)
+        decrypted_bytes = np.concatenate((decrypted_bytes,np.array(rr[i][0].transpose().reshape(1, -1))), axis=None)
 
     return [decrypted_bytes,rr[0][1]]
 
@@ -561,7 +559,7 @@ def keyExpansion(key, sbox):
     w = np.zeros((4, 60), dtype=np.ubyte)
 
     # set the first values of w equal to the key
-    temp_key = np.transpose(key.reshape(8, 4))
+    temp_key = key.reshape(4, 8)
     w[:4, :8] = temp_key
 
     for i in range(8, 60, 1):
@@ -627,16 +625,16 @@ def getBitsandPad(arg, key=False, img=False):
             bits = np.concatenate(
                 (bits, np.zeros(32, dtype=np.ubyte)), axis=None)
             bits = bits[:32]
-
         bits = bits.reshape(-1, 4).transpose()
+
     # plaintext or image
     else:
         if len(bits) != 16*(len(bits)//16):
             bits = np.concatenate(
                 (bits, np.zeros(16, dtype=np.ubyte)), axis=None)
             bits = bits[:16*((len(bits)-16)//16)+16]
-        bits = bits.reshape(-1, 4)
-
+        bits = bits.reshape(-1, 4).transpose()
+        
     return bits
 
 # Format the IV to be used in the AES algorithm
@@ -670,10 +668,10 @@ def formatIV(argIV, key):
         argIV = argIV[:16]
         argIV = argIV.reshape(4, 4)
 
+    argIV = argIV.transpose()
     return argIV
 
 # Multiplication in the GF(2^8) Finite field using Russian Peasant Multiplication algorithm (https://en.wikipedia.org/wiki/Finite_field_arithmetic#Rijndael%27s_finite_field)
-# TODO:  https://en.wikipedia.org/wiki/Finite_field_arithmetic#Rijndael%27s_finite_field reference dit
 def GF_mul(arg1, arg2):
     p = 0
 
@@ -732,7 +730,6 @@ def chartobyte(chararray):
     return np.array(output,dtype=np.ubyte)
 
 
-
 if __name__ == "__main__":
 
 
@@ -749,76 +746,61 @@ if __name__ == "__main__":
                         for value in inv_sbox], dtype=np.ubyte)
     inv_sbox = inv_sbox.reshape(16, 16)
 
-    # key = "Picture test!"
+    iv = np.load('jacobus\lookup_files\AES_CBC_IV.npy')
+    iv = np.array([int(str(value), 16) for value in iv], dtype=np.ubyte)
 
-    # input = img2array('red.png')
+    key = "Picture test!"
 
-    # start = time.time()
-    # enc_img = AES_Encrypt(True, input, None, key, sbox)
-    # end = time.time()
+    input = img2array('office.png')
 
-    # print("encryption: ",end-start)
+    start = time.time()
+    enc_img = AES_Encrypt(True, input, None, key, sbox)
+    end = time.time()
 
-    # array2img(enc_img,"red_enc.png")
+    print("encryption: ",end-start)
 
-
-    # start = time.time()
-    # dec_img = AES_Decrypt(True,enc_img,None,key,inv_sbox)
-    # end = time.time()
-
-    # array2img(dec_img,"red_dec.png")
-
-    # print("decryption: ",end-start)
-
-    key = "PERCY BYSSHE SHELLEY"
-    # input = "I met a traveller from an antique land,\nWho said - 'Two vast and trunkless legs of stone\nStand in the desert. . . . Near them, on the sand,\nHalf sunk a shattered visage lies, whose frown,\nAnd wrinkled lip, and sneer of cold command,\nTell that its sculptor well those passions read\nWhich yet survive, stamped on these lifeless things,\nThe hand that mocked them, and the heart that fed;\nAnd on the pedestal, these words appear:\nMy name is Ozymandias, King of Kings;\nLook on my Works, ye Mighty, and despair!\nNothing beside remains. Round the decay\nOf that colossal Wreck, boundless and bare\nThe lone and level sands stretch far away.'"
-
-    input = "Die is n toets"
-    #input = "Die si asdfaskdjfh asdkh#$%^&*(), shasdkjfh sadkjfha sdkfj amsdf askdfhalksdjfh aksdjfh alksdjf haksdjf haksdfha98sd76f9a78sd56f9a78sdf aweo8r73i4uhr ljsdkf lajkdfh lsakdj h#$%^&*(*&^%$#$%^&*(&^%$SXDCFGVBHJN"
-
-    enc_text = AES_Encrypt(True, input, None, key, sbox)
-
-    print(enc_text["States"])
-    print("\n\n")
-    print(enc_text["Ciphertext"])
-    print("\n\n")
-
-    dec_text = AES_Decrypt(True, enc_text, None, key, inv_sbox)
-
-    print(dec_text["States"])
-    print("\n\n")
-    print(dec_text["Ciphertext"])
-    print("\n\n")
+    array2img(enc_img,"office_enc.png")
 
 
+    start = time.time()
+    dec_img = AES_Decrypt(True,enc_img,None,key,inv_sbox)
+    end = time.time()
 
-# TODO: load IV
-# TODO: hoe werk die IV
-# TODO: kyk of formatIV regitg random is????
-
-
-# TODO: CBC AES encryption kan nie geparellize word nie omdat hulle van mekaar afhang, maar die decrytion kan wel 
-# TODO: CFB OFB en CRT AES kort nie padding nie, dus kan images sonder enige ander work around encrypt word so se dit sal beter wees as dit nodig is
-# om die encrypted images te kan sien
-# This characteristic of stream ciphers makes them suitable for applications that require the encrypted ciphertext data to be the same size as the original plaintext data.
-# dit is n disadvantage van n CBC omdat dit n BLOCK cipher is en nie soos die ander n STREAM cipher nie
-# maar CBC werk beter (as ECB) by images want dit obscure die image heeltemal weens IV
-
-# TODO: vergelyk met normale DES, 3DES, ECB AES en CBC AES, CBC behoort way beter te wees selfs met eenvormige kleure
+    print("decryption: ",end-start)
+    
+    array2img(dec_img,"office_dec.png")
 
 
-# TODO: IV en sbox input format en die ander npy file goed
+    # key = "hello asdfasdadf"
+    
+    # # input = "I met a traveller from an antique land,\nWho said - 'Two vast and trunkless legs of stone\nStand in the desert. . . . Near them, on the sand,\nHalf sunk a shattered visage lies, whose frown,\nAnd wrinkled lip, and sneer of cold command,\nTell that its sculptor well those passions read\nWhich yet survive, stamped on these lifeless things,\nThe hand that mocked them, and the heart that fed;\nAnd on the pedestal, these words appear:\nMy name is Ozymandias, King of Kings;\nLook on my Works, ye Mighty, and despair!\nNothing beside remains. Round the decay\nOf that colossal Wreck, boundless and bare\nThe lone and level sands stretch far away.'"
+
+    # input = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Suspendisse malesuada dignissim erat sed dictum. Etiam rutrum vulputate tempus. Integer sagittis, ex sed porta pellentesque, nisl est facilisis mauris, sit amet pulvinar turpis tortor quis purus. In fringilla efficitur diam, nec rutrum erat varius eget. Maecenas auctor viverra mauris in euismod. Morbi condimentum, est sit amet molestie faucibus, odio libero maximus leo, vitae vehicula dui augue ac nisi. Duis id semper massa. Fusce felis est, tempus id sodales euismod, rhoncus vitae elit. Nullam tincidunt mollis tellus sit amet porta. Curabitur lobortis magna sed nunc cursus, quis vestibulum ex tincidunt. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Vivamus iaculis imperdiet urna, vel molestie magna dictum in. Aliquam condimentum volutpat ante, ut accumsan lorem dictum non."
+    
+    # # print(len(input))
+    # #input = "hello hello"
+
+    # # vir een of ander rede as jy "()" werk dit nie :::::DD
+    # # input = "Die si asdfaskdjfh asdkh#$%^&*(), shasdkjfh sadkjfha sdkfj amsdf askdfhalksdjfh aksdjfh alksdjf haksdjf haksdfha98sd76f9a78sd56f9a78sdf aweo8r73i4uhr ljsdkf lajkdfh lsakdj h#$%^&*(*&^%$#$%^&*(&^%$SXDCFGVBHJN"
+
+    # # input = "Die is n toets ek kan dit doen Die is n toets ek kan dit doen Die is n toets ek kan dit doen Die is n toets ek kan dit doen Die is n toets ek kan dit doen Die is n toets ek kan dit doen Die is n toets ek kan dit doen Die is n toets ek kan dit doen Die is n toets ek kan dit doen Die is n toets ek kan dit doenDie is n toets ek kan dit doen Die is n toets ek kan dit doen Die is n toets ek kan dit doen Die is n toets ek kan dit doenDie is n toets ek kan dit doen Die is n toets ek kan dit doen Die is n toets ek kan dit doenDie is n toets ek kan dit doen Die is n toets ek kan dit doen  Die is n toets ek kan dit doen Die is n toets ek kan dit doen Die is n toets ek kan dit doenDie is n toets ek kan dit doen Die is n toets ek kan dit doen Die is n toets ek kan dit doen Die is n toets ek kan dit doen Die is n toets ek kan dit doen Die is n toets ek kan dit doenDie is n toets ek kan dit doenDie is n toets ek kan dit doen Die is n toets ek kan dit doen Die is n toets ek kan dit doen"
+
+    # enc_text = AES_Encrypt(False, input, iv, key, sbox)
+        
+    # print("Encrypted: ",enc_text)
+    # # print(enc_text["States"])
+    # # print("\n\n")
+    # # print(enc_text["Ciphertext"])
+    # # print("\n\n")
+
+    # dec_text = AES_Decrypt(False, enc_text, iv, key, inv_sbox)
+
+    # print("Decrypted: \n",dec_text)
 
 
-# verduidelik in report hkm rijndael cool is want input bits is nie baie dieselfde as output bits nie kan dit vergelyk dalk met ander s-boxes,
-#  en nie linear nie, check verwysing op bladsy 185
-
-# why CBC, because the same plaintext block will outpout different cipher text blocks en dan se iets van man in the middle attacks, check bl 216 repeating patterns
-# kan nie detect wor d nie
-
-# hulle noem dit n IV vecotr maar dis eintlink n blok met die selfde groote as die cipher block
+    # print(dec_text["States"])
+    # print("\n\n")
+    # print(dec_text["Ciphertext"])
+    # print("\n\n")
 
 
-
-
-##### ASCII for text and pixel array for images... (0-255)
