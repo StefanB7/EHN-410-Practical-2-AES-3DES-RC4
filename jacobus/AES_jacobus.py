@@ -62,8 +62,6 @@ def AES_Encrypt(inspect_mode, plaintext, arg_iv, key, sbox_array):
     
     for i in range(len(plain_bytes)): 
 
-        print("IIIIIIIIIIIIIIIIIII: ", i)
-
         bytes_key = getBitsandPad(key, True)
 
         # key expansion
@@ -217,8 +215,6 @@ def AES_Decrypt(inspect_mode, ciphertext, iv, key, inv_sbox_array):
 
     for i in range(len(cipher_bytes)):
         
-        print("DDDDDDDDDDDDDDDDDDD: ", i)
-
         bytes_key = getBitsandPad(key, True)
 
         # key expansion
@@ -440,7 +436,6 @@ def AES_Encrypt_MP(inspect_mode, plaintext, arg_iv, key, sbox_array):
             return np.dstack((encrypted_bytes0.astype(int),encrypted_bytes1.astype(int),encrypted_bytes2.astype(int),alpha_layer.astype(int)))
         else:
             return np.dstack((encrypted_bytes0.astype(int),encrypted_bytes1.astype(int),encrypted_bytes2.astype(int)))
-
 
 def AES_Loop_MP(key,sbox_array,arg_iv,iblocks,plain_bytes):
 
@@ -665,7 +660,6 @@ def AES_Loop_MP_DEC(key,inv_sbox_array,iv,iblocks,cipher_bytes):
         #     decrypted_bytes = np.concatenate((decrypted_bytes, np.array(bytes_block.reshape(1, -1)[0])), axis=None)
 
     return decrypted_bytes
-
 
 def AES_Decrypt_blocks(bytes_block,bytes_key,inv_sbox_array,xorBlock):
     # Round 0:
@@ -1008,8 +1002,6 @@ def array2img(arr, loc):
 
 
 
-
-
 if __name__ == "__main__":
 
 
@@ -1028,7 +1020,7 @@ if __name__ == "__main__":
 
     key = "Picture test!"
 
-    input = img2array('office.png')
+    input = img2array('img1_Low.png')
 
     start = time.time()
     enc_img = AES_Encrypt_MP(False, input, None, key, sbox)
@@ -1036,14 +1028,14 @@ if __name__ == "__main__":
 
     print("encryption: ",end-start)
 
-    array2img(enc_img,"office_enc.png")
+    array2img(enc_img,"img1_Low_enc.png")
 
 
     start = time.time()
     dec_img = AES_Decrypt_MP(False,enc_img,None,key,inv_sbox)
     end = time.time()
 
-    array2img(dec_img,"office_dec.png")
+    array2img(dec_img,"img1_Low_dec.png")
 
     print("decryption: ",end-start)
 
