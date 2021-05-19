@@ -109,9 +109,6 @@ def TDEA_Encrypt(plaintext, inspect_mode = 0, key1 = 'abcdefgh', key2 = 'abcdefg
             return {"DES1_Outputs": roundEncryption1arr, "DES2_Outputs": roundDecryption1arr, "DES3_Outputs": roundEncryption2arr, "Ciphertext": ciphertextOutput}
 
 
-
-
-
     # If the plaintext is an image (ndarray) that needs to be encrypted:
     if (isinstance(plaintext, np.ndarray)):
 
@@ -800,13 +797,13 @@ def chartobyte(chararray):
 def toHexString(bytearrayList):
     stringList = []
     for i in range(len(bytearrayList)):
-        stringTemp = ""
+        stringTemp = []
         singleByte = bytearray(1)
         for j in range(len(bytearrayList[i])):
             singleByte[0] = bytearrayList[i][j]
-            stringTemp = stringTemp + singleByte.hex().upper()
+            stringTemp.append(singleByte.hex().upper())
 
-        stringList.append(stringTemp)
+        stringList.append(np.array(stringTemp))
 
     return stringList
 
@@ -926,21 +923,22 @@ if __name__ == "__main__":
     tdeaPlaintextDecrypt = TDEA_Decrypt(1, tdeaCiphertext["Ciphertext"], "abcdefgh", "abcdkfgh", "abxdefgh", INV_IP)
     print("Encryption:")
     print(tdeaCiphertext)
+    print(tdeaPlaintextDecrypt["DES1_Outputs"])
     print("Decryption:")
     print(tdeaPlaintextDecrypt)
     #
     #
     #Test Image:
-    p_File = Image.open('office.png')
-    p_img = np.asarray(p_File)
-    imgENC = TDEA_Encrypt(p_img, 0, "abcdefgh", "abcdkfgh", "abxdefgh", IP)
-
-    Image.fromarray(imgENC.astype(np.uint8)).save('office_encrypted.png')
-
-    print("Image Encryption Done")
-
-    p_File = Image.open('office_encrypted.png')
-    p_img = np.asarray(p_File)
-    imgENC = TDEA_Decrypt(0, p_img, "abcdefgh", "abcdkfgh", "abxdefgh", INV_IP)
-
-    Image.fromarray(imgENC.astype(np.uint8)).save('office_decrypted.png')
+    # p_File = Image.open('office.png')
+    # p_img = np.asarray(p_File)
+    # imgENC = TDEA_Encrypt(p_img, 0, "abcdefgh", "abcdkfgh", "abxdefgh", IP)
+    #
+    # Image.fromarray(imgENC.astype(np.uint8)).save('office_encrypted.png')
+    #
+    # print("Image Encryption Done")
+    #
+    # p_File = Image.open('office_encrypted.png')
+    # p_img = np.asarray(p_File)
+    # imgENC = TDEA_Decrypt(0, p_img, "abcdefgh", "abcdkfgh", "abxdefgh", INV_IP)
+    #
+    # Image.fromarray(imgENC.astype(np.uint8)).save('office_decrypted.png')
