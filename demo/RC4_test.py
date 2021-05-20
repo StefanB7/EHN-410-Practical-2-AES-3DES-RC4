@@ -21,7 +21,7 @@ if __name__ == "__main__":
 
     # One character of plaintext:
     print("____________________________________________________")
-    print("\nTest (1/5): One character of plaintext (without inspect_mode):")
+    print("\nTest (1/6): One character of plaintext (without inspect_mode):")
     print("\nInput:")
     print("Plaintext: a")
     print("Key: I've got something very important to say")
@@ -33,7 +33,7 @@ if __name__ == "__main__":
 
     # Use a key with length of 1:
     print("____________________________________________________")
-    print("\nTest (2/5): One character key (without inspect_mode):")
+    print("\nTest (2/6): One character key (without inspect_mode):")
     print("\nInput:")
     print("Plaintext: We've got them boys!")
     print("Key: a")
@@ -45,7 +45,7 @@ if __name__ == "__main__":
 
     # Use a key with length of more than 256 characters
     print("____________________________________________________")
-    print("\nTest (3/5): Key with length more than 256 characters (without inspect_mode):")
+    print("\nTest (3/6): Key with length more than 256 characters (without inspect_mode):")
     print("\nInput:")
     print("Plaintext: Meet me tomorrow 3 o'clock at the fountain in the middle of town")
     print("Key: The longest word in most dictionaries is: PNEUMONOULTRAMICROSCOPICSILICOVOLCANOCONIOSIS, followed by PSEUDOPSEUDOHYPOPARATHYROIDISM. I still don't have enough characters, yikes! Here is a filler sentance: The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog.")
@@ -59,7 +59,7 @@ if __name__ == "__main__":
 
     # Plaintext with a length of 5 bytes, when inspect_mode = true
     print("____________________________________________________")
-    print("\nTest (4/5): Plaintext with a length of 5 bytes, with inspect_mode):")
+    print("\nTest (4/6): Plaintext with a length of 5 bytes, with inspect_mode):")
     print("\nInput:")
     print("Plaintext: acorn")
     print("Key: JacobusStefan")
@@ -78,9 +78,26 @@ if __name__ == "__main__":
     print("Plaintext:")
     print(txtDEC["Plaintext"])
 
+    # Plaintext given:
+    print("____________________________________________________")
+    print("\nTest (5/6): Plaintext given:")
+    file = open("message.txt")
+    plaintext = file.read()
+    file.close()
+    print("\nInput:")
+    print("Plaintext: " + str(plaintext))
+    print("Key: I've got something very important to say")
+    print("\nOutput:")
+    txtENC = RC4_Module.RC4_Encrypt(False, plaintext, 'Ive got something very important to say')
+    print("\nEncrypted text: ")
+    print(txtENC)
+    txtDEC = RC4_Module.RC4_Decrypt(False, txtENC, 'Ive got something very important to say')
+    print("\nDecrypted text: ")
+    print(txtDEC)
+
     # Test image
     print("\n____________________________________________________")
-    print("\nTest (5/5): Testing Image Encryption and Decryption")
+    print("\nTest (6/6): Testing Image Encryption and Decryption")
     print("\nInput:")
     print("Key: StefanJacobus")
     p_File = Image.open('cat.png')
