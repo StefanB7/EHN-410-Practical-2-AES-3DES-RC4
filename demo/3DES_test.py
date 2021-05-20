@@ -26,7 +26,7 @@ if __name__ == "__main__":
 
     # One character of plaintext:
     print("\n____________________________________________________")
-    print("\nTest (1/6): One character of plaintext (without inspect_mode):")
+    print("\nTest (1/5): One character of plaintext (without inspect_mode):")
     print("\nInput:")
     print("Plaintext: a")
     print("Keys:")
@@ -41,7 +41,7 @@ if __name__ == "__main__":
 
     # Plaintext with integral length of 8 bytes:
     print("\n____________________________________________________")
-    print("\nTest (2/6): Plaintext with integral length of 8 bytes:")
+    print("\nTest (2/5): Plaintext with integral length of 8 bytes:")
     print("\nInput:")
     print("Plaintext: Did, you hear?! The quick, brown fox jumped, over the lazy dog!?")
     print("Keys:")
@@ -58,7 +58,7 @@ if __name__ == "__main__":
 
     # Plaintext with length not an integral number of 8 bytes:
     print("\n____________________________________________________")
-    print("\nTest (3/6): Plaintext with length not an integral number of 8 bytes:")
+    print("\nTest (3/5): Plaintext with length not an integral number of 8 bytes:")
     print("\nInput:")
     print("Plaintext: The quick brown fox jumps over the lazy dog")
     print("Keys:")
@@ -75,7 +75,7 @@ if __name__ == "__main__":
 
     # Plaintext with length an integral number of 8 bytes, and inspect mode = true:
     print("\n____________________________________________________")
-    print("\nTest (4/6): Plaintext with length integral number of 8 bytes, and inspect mode = true:")
+    print("\nTest (4/5): Plaintext with length integral number of 8 bytes, and inspect mode = true:")
     print("\nInput:")
     print("Plaintext: ElonMusk")
     print("Keys:")
@@ -106,7 +106,7 @@ if __name__ == "__main__":
 
     # Test plaintext they have given us:
     print("\n____________________________________________________")
-    print("\nTest (5/6): Plaintext given test:")
+    print("\nTest (3/5): Plaintext given test:")
     file = open("message.txt")
     plaintext = file.read()
     file.close()
@@ -126,7 +126,7 @@ if __name__ == "__main__":
 
     # Test image
     print("\n____________________________________________________")
-    print("\nTest (6/6): Testing Image Encryption and Decryption")
+    print("\nTest (5/5): Testing Image Encryption and Decryption")
     print("\nInput:")
     print("Keys:")
     print("k1: EarthEar")
