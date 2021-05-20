@@ -16,20 +16,20 @@ imgDEC = None
 if __name__ == "__main__":
 
     # load sbox and IV
-    sbox = np.load('jacobus\lookup_files\AES_Sbox_lookup.npy')
+    sbox = np.load('lookup_files\AES_Sbox_lookup.npy')
 
     sbox = sbox.reshape(1, -1)[0]
     sbox = np.array([int(str(value), 16) for value in sbox], dtype=np.ubyte)
     sbox = sbox.reshape(16, 16)
 
 
-    inv_sbox = np.load('jacobus\lookup_files\AES_Inverse_Sbox_lookup.npy')
+    inv_sbox = np.load('lookup_files\AES_Inverse_Sbox_lookup.npy')
     inv_sbox = inv_sbox.reshape(1, -1)[0]
     inv_sbox = np.array([int(str(value), 16)
                         for value in inv_sbox], dtype=np.ubyte)
     inv_sbox = inv_sbox.reshape(16, 16)
 
-    iv = np.load('jacobus\lookup_files\AES_CBC_IV.npy')
+    iv = np.load('lookup_files\AES_CBC_IV.npy')
     iv = np.array([int(str(value), 16) for value in iv], dtype=np.ubyte)
 
     # # One character of plaintext:
@@ -92,6 +92,7 @@ if __name__ == "__main__":
     print("\nTest (5/5): Testing Image Encryption and Decryption")
     print("\nInput:")
     print("Key: startrekwasbeter")
+<<<<<<< Updated upstream
     p_img = AES_Module.img2array('jacobus\images\\gebou_500.png')
     imgENC = AES_Module.AES_Encrypt(False, p_img, [4,20,6,9,4,20,6,9,4,20,6,9,4,20,6,9], "startrekwasbeter", sbox)
     print("Encryption Done!")
@@ -99,6 +100,15 @@ if __name__ == "__main__":
     imgDEC = AES_Module.AES_Decrypt(False, imgENC, [4,20,6,9,4,20,6,9,4,20,6,9,4,20,6,9], "startrekwasbeter", inv_sbox)
     print("Decryption Done!")
     AES_Module.array2img(imgDEC,"jacobus\images\\gebou_500_dec.png")
+=======
+    p_img = AES_Module.img2array('berge_700.png')
+    imgENC = AES_Module.AES_Encrypt(False, p_img, [4,20,6,9,4,20,6,9,4,20,6,9,4,20,6,9], "startrekwasbeter", sbox)
+    print("Encryption Done!")
+    AES_Module.array2img(imgENC,"berge_700_enc.png")
+    imgDEC = AES_Module.AES_Decrypt(False, imgENC, [4,20,6,9,4,20,6,9,4,20,6,9,4,20,6,9], "startrekwasbeter", inv_sbox)
+    print("Decryption Done!")
+    AES_Module.array2img(imgDEC,"berge_700_dec.png")
+>>>>>>> Stashed changes
 
     print("\n____________________________________________________")
 
