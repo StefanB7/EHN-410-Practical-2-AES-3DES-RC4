@@ -92,13 +92,13 @@ if __name__ == "__main__":
     print("\nTest (5/5): Testing Image Encryption and Decryption")
     print("\nInput:")
     print("Key: startrekwasbeter")
-    p_img = AES_Module.img2array('jacobus\images\\berge_700.png')
+    p_img = AES_Module.img2array('jacobus\images\\gebou_500.png')
     imgENC = AES_Module.AES_Encrypt(False, p_img, [4,20,6,9,4,20,6,9,4,20,6,9,4,20,6,9], "startrekwasbeter", sbox)
     print("Encryption Done!")
-    AES_Module.array2img(imgENC,"jacobus\images\\berge_700_enc.png")
+    AES_Module.array2img(imgENC,"jacobus\images\\gebou_500_enc.png")
     imgDEC = AES_Module.AES_Decrypt(False, imgENC, [4,20,6,9,4,20,6,9,4,20,6,9,4,20,6,9], "startrekwasbeter", inv_sbox)
     print("Decryption Done!")
-    AES_Module.array2img(imgDEC,"jacobus\images\\berge_700_dec.png")
+    AES_Module.array2img(imgDEC,"jacobus\images\\gebou_500_dec.png")
 
     print("\n____________________________________________________")
 
