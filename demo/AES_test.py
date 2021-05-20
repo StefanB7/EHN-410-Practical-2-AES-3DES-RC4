@@ -81,11 +81,17 @@ if __name__ == "__main__":
     print("\nOutput:")
     txtENC = AES_Module.AES_Encrypt(True,"ElonMusk", iv, "minecraft", sbox)
     print("----- Encryption: ------")
+    print("")
     print(txtENC['States'])
+    print("")
     print(txtENC['Ciphertext'])
+    print("")
     txtDEC = AES_Module.AES_Decrypt(True, txtENC, iv, "minecraft", inv_sbox)
+    print("")
     print(txtDEC['States'])
+    print("")
     print(txtDEC['Plaintext'])
+    print("")
 
     # Test image
     print("\n____________________________________________________")

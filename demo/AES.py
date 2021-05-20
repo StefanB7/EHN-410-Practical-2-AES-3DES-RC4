@@ -194,7 +194,8 @@ def AES_Loop_MP_ENC(key,sbox_array,arg_iv,iblocks,plain_bytes,inspect_rounds_sta
 
             # save round state
             if inspect_mode:
-                inspect_rounds_states.append(bytes_block)
+                inspect_rounds_states.append(np.array([[hex(v)[2:].upper() for v in bytes_block[0]],[hex(v)[2:].upper() for v in bytes_block[1]],[hex(v)[2:].upper() for v in bytes_block[2]],[hex(v)[2:].upper() for v in bytes_block[3]]]))
+                
 
         # Round 14 (final):
         # Key selection form expansion
@@ -407,7 +408,7 @@ def AES_Decrypt_blocks(bytes_block,bytes_key,inv_sbox_array,xorBlock):
         bytes_block = inv_MixColumns(bytes_block)
 
         # save round state
-        inspect_rounds_states.append(bytes_block)
+        inspect_rounds_states.append(np.array([[hex(v)[2:].upper() for v in bytes_block[0]],[hex(v)[2:].upper() for v in bytes_block[1]],[hex(v)[2:].upper() for v in bytes_block[2]],[hex(v)[2:].upper() for v in bytes_block[3]]]))
 
     # Round 14:
     # Key selection from expansion
