@@ -13,8 +13,14 @@ txtDEC = ""
 imgENC = None
 imgDEC = None
 
-IP=[58,50,42,34,26,18,10,2,60,52,44,36,28,20,12,4,62,54,46,38,30,22,14,6,64,56,48,40,32,24,16,8,57,49,41,33,25,17,9,1,59,51,43,35,27,19,11,3,61,53,45,37,29,21,13,5,63,55,47,39,31,23,15,7]
-INV_IP = [40.0, 8.0, 48.0, 16.0, 56.0, 24.0, 64.0, 32.0, 39.0, 7.0, 47.0, 15.0, 55.0, 23.0, 63.0, 31.0, 38.0, 6.0, 46.0, 14.0, 54.0, 22.0, 62.0, 30.0, 37.0, 5.0, 45.0, 13.0, 53.0, 21.0, 61.0, 29.0, 36.0, 4.0, 44.0, 12.0, 52.0, 20.0, 60.0, 28.0, 35.0, 3.0, 43.0, 11.0, 51.0, 19.0, 59.0, 27.0, 34.0, 2.0, 42.0, 10.0, 50.0, 18.0, 58.0, 26.0, 33.0, 1.0, 41.0, 9.0, 49.0, 17.0, 57.0, 25.0]
+IP_File = "Practical 2 File Package/DES_Initial_Permutation.npy"
+INV_IP_File = "Practical 2 File Package/DES_Inverse_Initial_Permutation.npy"
+
+IP= np.load(IP_File)
+INV_IP = np.load(INV_IP_File)
+
+IP = IP.tolist()
+INV_IP = INV_IP.tolist()
 
 if __name__ == "__main__":
 
@@ -97,6 +103,26 @@ if __name__ == "__main__":
     print(txtDEC['DES3_Outputs'])
     print("Plaintext:")
     print(txtDEC["Ciphertext"])
+
+    # Test plaintext they have given us:
+    print("\n____________________________________________________")
+    print("\nTest (3/5): Plaintext given test:")
+    file = open("message.txt")
+    plaintext = file.read()
+    file.close()
+    print("\nInput:")
+    print("Plaintext: " + str(plaintext))
+    print("Keys:")
+    print("k1: zeuszeus")
+    print("k2: achilles")
+    print("k3: apollo12")
+    print("\nOutput:")
+    txtENC = TDES_Module.TDEA_Encrypt(False, plaintext, 'zeuszeus', 'achilles', 'apollo12', IP)
+    print("Encrypted text:")
+    print(txtENC)
+    txtDEC = TDES_Module.TDEA_Decrypt(False, txtENC, 'zeuszeus', 'achilles', 'apollo12', INV_IP)
+    print("Decrypted text: ")
+    print(txtDEC)
 
     # Test image
     print("\n____________________________________________________")
