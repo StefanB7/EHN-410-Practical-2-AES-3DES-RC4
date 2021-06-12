@@ -32,7 +32,7 @@ def RC4_Enctrypt(inspect_mode, plaintext, key):
     #Perform a permutation on S:
     temp = 0
     index = 0
-    for i in range(255):
+    for i in range(256):
         index = (index + S[i] + T[i]) % 256
         temp = S[i]
 
@@ -171,7 +171,7 @@ def RC4_Decrypt(inspect_mode, ciphertext, key):
     #Perform a permutation on S:
     temp = 0
     index = 0
-    for i in range(255):
+    for i in range(256):
         index = (index + S[i] + T[i]) % 256
         temp = S[i]
         S[i] = S[index]
